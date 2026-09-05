@@ -35,3 +35,20 @@ jobs:
 
       # Typecheck, the full test suite, and a production build.
       - run: bun run check
+
+  # GitHub's own generic-secret detection sits behind the paid Secret Protection
+  # tier, so provider patterns (AWS keys, GitHub tokens) are caught on push but a
+  # high-entropy value like BETTER_AUTH_SECRET is not. Gitleaks closes that gap
+  # on every pull request instead.
+  secret-scan:
+    name: secret-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Scan the pull request's history, not just its tip.
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
