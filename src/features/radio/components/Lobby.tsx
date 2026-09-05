@@ -1,20 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { Headphones, KeyRound, Plus, Radio, Settings } from "lucide-react";
+import { Headphones, KeyRound, Library, ListMusic, Plus, Radio } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { LibraryModal } from "../../music/components/LibraryModal";
 import { LibraryQuickView } from "../../music/components/LibraryQuickView";
 import { UploadTrackModal } from "../../music/components/UploadTrackModal";
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  QueryFreshness,
-} from "../../../shared/components/AsyncState";
+import { QueryFreshness } from "../../../shared/components/AsyncState";
 import { roomsQueryOptions, type RoomSummary } from "../queries";
 import { useRoomMutations } from "../use-room-mutations";
 import { Modal } from "../../../shared/components/Modal";
 import { useMediaQuery } from "../../../shared/use-media-query";
+import { OwnedRoomsList, RoomsModal } from "./OwnedRooms";
 import { RoomSettingsModal } from "./RoomSettingsModal";
+import { trackLibraryQueryOptions } from "../../music/queries";
 
 type EntryIntent = "create" | "join" | null;
 
@@ -30,11 +27,21 @@ export function Lobby({ userId }: { userId: string }) {
   const [uploading, setUploading] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const [managing, setManaging] = useState<RoomSummary | null>(null);
+  const [showingRooms, setShowingRooms] = useState(false);
   const [code, setCode] = useState(
     () => new URLSearchParams(location.search).get("room")?.toUpperCase() || "",
   );
+  const library = useQuery({ ...trackLibraryQueryOptions(userId), enabled: Boolean(userId) });
   const busy = createRoom.isPending || joinRoom.isPending;
   const ownedRooms = rooms.data?.rooms ?? [];
+  const trackCount = library.data?.tracks.length ?? 0;
+
+  const roomListProps = {
+    rooms,
+    busy,
+    onOpen: (room: RoomSummary) => joinRoom.mutate({ roomId: room.id }),
+    onManage: (room: RoomSummary) => setManaging(room),
+  };
 
   function create(event: FormEvent) {
     event.preventDefault();
@@ -127,8 +134,23 @@ export function Lobby({ userId }: { userId: string }) {
         </div>
       )}
 
-      {/* Two fixed panels. Only their lists scroll, so the lobby itself never
-          moves and everything stays visible at a glance. */}
+      {/* On a phone there is no room for two panels on a page that never
+          scrolls, so the lists live in modals behind buttons that carry their
+          counts. Wider screens keep both panels in view. */}
+      {compact ? (
+        <div className="lobby-actions">
+          <button className="lobby-action" type="button" onClick={() => setShowingRooms(true)}>
+            <ListMusic size={18} />
+            <span>Your rooms</span>
+            <strong>{ownedRooms.length}</strong>
+          </button>
+          <button className="lobby-action" type="button" onClick={() => setBrowsing(true)}>
+            <Library size={18} />
+            <span>Music library</span>
+            <strong>{trackCount}</strong>
+          </button>
+        </div>
+      ) : (
       <div className="lobby-panels">
         <section className="quick-panel lobby-panel">
           <div className="quick-panel">
@@ -146,40 +168,7 @@ export function Lobby({ userId }: { userId: string }) {
               </span>
             </div>
             <div className="lobby-panel-scroll">
-              {rooms.isPending && <LoadingState label="Loading your rooms…" />}
-              {rooms.isError && !rooms.data && (
-                <ErrorState
-                  message={rooms.error.message}
-                  retry={() => void rooms.refetch()}
-                />
-              )}
-              {rooms.data && ownedRooms.length === 0 && (
-                <EmptyState>Take the booth to make your first room.</EmptyState>
-              )}
-              <div className="owned-list">
-                {ownedRooms.map((ownedRoom) => (
-                  <div className="owned-row" key={ownedRoom.id}>
-                    <button
-                      type="button"
-                      className="owned-open"
-                      disabled={busy}
-                      onClick={() => joinRoom.mutate({ roomId: ownedRoom.id })}
-                    >
-                      <span>{ownedRoom.name}</span>
-                      <strong>{ownedRoom.id}</strong>
-                    </button>
-                    <button
-                      type="button"
-                      className="owned-manage"
-                      onClick={() => setManaging(ownedRoom)}
-                      aria-label={`Manage ${ownedRoom.name}`}
-                      title="Room settings"
-                    >
-                      <Settings size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <OwnedRoomsList {...roomListProps} />
             </div>
           </div>
         </section>
@@ -200,6 +189,13 @@ export function Lobby({ userId }: { userId: string }) {
           />
         </section>
       </div>
+      )}
+
+      <RoomsModal
+        open={showingRooms}
+        onClose={() => setShowingRooms(false)}
+        {...roomListProps}
+      />
 
       <Modal
         open={entry !== null}
