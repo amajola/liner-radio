@@ -1,0 +1,51 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+  # Lets you redeploy the current main without pushing an empty commit.
+  workflow_dispatch:
+
+# D1 migrations must not run concurrently. Deploys are queued rather than
+# cancelled: an in-flight migration should be allowed to finish, not killed
+# halfway through leaving the schema in an unknown state.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      # The test script runs `node --experimental-strip-types`, so Node is still
+      # needed alongside Bun. package.json requires >=22.13.0.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: bun install --frozen-lockfile
+
+      # Typecheck, the full test suite and a production build all run before
+      # anything is allowed near production.
+      - name: Verify
+        run: bun run check
+
+      # Schema first: the new Worker code may depend on the new columns.
+      - name: Apply D1 migrations
+        run: bun run db:migrate:remote
+
+      - name: Deploy Worker
+        run: bun run deploy
