@@ -1,0 +1,37 @@
+name: CI
+
+# Runs on the pull request rather than only on main, so branch protection has a
+# check to require before a merge can reach production.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      # The test script runs `node --experimental-strip-types`, so Node is still
+      # needed alongside Bun. package.json requires >=22.13.0.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: bun install --frozen-lockfile
+
+      # Typecheck, the full test suite, and a production build.
+      - run: bun run check
