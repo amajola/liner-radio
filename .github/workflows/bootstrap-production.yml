@@ -1,0 +1,129 @@
+name: Bootstrap production resources
+
+# One-time (or occasional) setup. Deliberately never runs on push: creating
+# infrastructure is not something that should happen on every commit.
+on:
+  workflow_dispatch:
+    inputs:
+      d1_database_name:
+        description: D1 database name
+        required: true
+        default: liner-radio
+      r2_bucket_name:
+        description: R2 bucket name for uploaded audio
+        required: true
+        default: liner-radio-tracks
+
+# Needed to write the resulting database_id back into wrangler.jsonc.
+permissions:
+  contents: write
+
+concurrency:
+  group: production-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DB_NAME: ${{ inputs.d1_database_name }}
+      BUCKET_NAME: ${{ inputs.r2_bucket_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: bun install --frozen-lockfile
+
+      # Both creates tolerate "already exists" so re-running this workflow is
+      # safe: it converges on the desired state instead of failing.
+      - name: Create D1 database
+        run: |
+          bunx wrangler d1 create "$DB_NAME" \
+            || echo "D1 database '$DB_NAME' already exists; continuing."
+
+      - name: Create R2 bucket
+        run: |
+          bunx wrangler r2 bucket create "$BUCKET_NAME" \
+            || echo "R2 bucket '$BUCKET_NAME' already exists; continuing."
+
+      # Read the id back rather than parsing it out of the create output, so it
+      # works identically whether the database was just created or already there.
+      - name: Resolve database_id
+        id: resolve
+        run: |
+          set -euo pipefail
+          bunx wrangler d1 list --json > d1.json
+          DB_ID="$(jq -r --arg n "$DB_NAME" \
+            '.[] | select(.name == $n) | (.uuid // .id)' d1.json)"
+          if [ -z "$DB_ID" ] || [ "$DB_ID" = "null" ]; then
+            echo "Could not resolve an id for D1 database '$DB_NAME'." >&2
+            cat d1.json >&2
+            exit 1
+          fi
+          echo "database_id=$DB_ID" >> "$GITHUB_OUTPUT"
+          echo "Resolved $DB_NAME -> $DB_ID"
+
+      - name: Write database_id into wrangler.jsonc
+        env:
+          DB_ID: ${{ steps.resolve.outputs.database_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys
+
+          path, db_id = "wrangler.jsonc", os.environ["DB_ID"]
+          src = open(path).read()
+          data = json.loads(re.sub(r'^\s*//.*$', '', src, flags=re.M))
+
+          # Target the binding the Worker actually reads (env.DB) by name. A
+          # positional match would silently rewrite the wrong entry if a second
+          # D1 binding is ever added.
+          matches = [d for d in data.get("d1_databases", []) if d.get("binding") == "DB"]
+          if len(matches) != 1:
+              sys.exit(f'Expected exactly one d1_databases entry bound to "DB", found {len(matches)}.')
+
+          if matches[0].get("database_id") == db_id:
+              print("database_id already up to date.")
+              sys.exit(0)
+
+          matches[0]["database_id"] = db_id
+          open(path, "w").write(json.dumps(data, indent=2) + "\n")
+          print(f"Set DB database_id to {db_id}")
+          PY
+
+      - name: Commit the change
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- wrangler.jsonc; then
+            echo "No change to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add wrangler.jsonc
+          git commit -m "Point wrangler at the production D1 database"
+          git push
+
+      - name: Summary
+        run: |
+          {
+            echo "### Production resources ready"
+            echo ""
+            echo "- D1 database: \`$DB_NAME\`"
+            echo "- R2 bucket: \`$BUCKET_NAME\`"
+            echo ""
+            echo "Still to do by hand, once:"
+            echo ""
+            echo '- `bunx wrangler secret put BETTER_AUTH_SECRET` (use `openssl rand -base64 32`)'
+            echo "- Run the **Deploy to production** workflow. A push made by CI does"
+            echo "  not trigger other workflows, so the first deploy needs a manual run."
+          } >> "$GITHUB_STEP_SUMMARY"

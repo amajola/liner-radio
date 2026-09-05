@@ -1,6 +1,6 @@
 # Start here
 
-Run `npm run db:migrate:local`, followed by `npm run dev`, then open
+Run `bun run db:migrate:local`, followed by `bun run dev`, then open
 <http://localhost:5173>.
 
 The current architecture is intentionally independent of any hosted application

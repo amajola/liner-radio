@@ -3,7 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { apply, nextAdvanceAt } from "../lib/radio/model.ts";
 
-const wrangler = await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+const wrangler = JSON.parse(
+  (await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8")).replace(
+    /^\s*\/\/.*$/gm,
+    "",
+  ),
+);
 const workerEntry = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
 const channel = await readFile(new URL("../worker/room-channel.ts", import.meta.url), "utf8");
 const api = await readFile(new URL("../worker/api.ts", import.meta.url), "utf8");
@@ -47,8 +52,14 @@ const baseRoom = () => ({
 });
 
 test("a room broadcasts over a durable object rather than per-tab polling", () => {
-  assert.match(wrangler, /"class_name":\s*"RoomChannel"/);
-  assert.match(wrangler, /"new_sqlite_classes":\s*\["RoomChannel"\]/);
+  assert.ok(
+    wrangler.durable_objects.bindings.some((binding) => binding.class_name === "RoomChannel"),
+  );
+  assert.ok(
+    wrangler.migrations.some((migration) =>
+      migration.new_sqlite_classes?.includes("RoomChannel"),
+    ),
+  );
   assert.match(workerEntry, /export \{ RoomChannel \}/);
   assert.match(channel, /ctx\.acceptWebSocket/);
   assert.match(channel, /for \(const socket of this\.ctx\.getWebSockets\(\)\)/);

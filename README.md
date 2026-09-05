@@ -19,13 +19,14 @@ use the same origin.
 
 ## Local development
 
-Requires Node.js 22.13 or newer.
+Requires Bun 1.4 or newer, plus Node.js 22.13 or newer (the test runner uses
+`node --experimental-strip-types`).
 
 ```sh
-npm install
+bun install
 cp .dev.vars.example .dev.vars
-npm run db:migrate:local
-npm run dev
+bun run db:migrate:local
+bun run dev
 ```
 
 Open <http://localhost:5173>. The Vite development server runs the React client,
@@ -38,15 +39,15 @@ production.
 ## Commands
 
 ```sh
-npm run dev                 # local SPA + Worker runtime
-npm run typecheck           # TypeScript
-npm test                    # domain and HTTP contract tests
-npm run build               # production client + Worker bundles
-npm run check               # all validation
-npm run db:generate         # create a migration after schema changes
-npm run db:migrate:local    # apply migrations to local D1
-npm run db:migrate:remote   # apply migrations to production D1
-npm run deploy              # build and deploy with Wrangler
+bun run dev                 # local SPA + Worker runtime
+bun run typecheck           # TypeScript
+bun run test                # domain and HTTP contract tests
+bun run build               # production client + Worker bundles
+bun run check               # all validation
+bun run db:generate         # create a migration after schema changes
+bun run db:migrate:local    # apply migrations to local D1
+bun run db:migrate:remote   # apply migrations to production D1
+bun run deploy              # build and deploy with Wrangler
 ```
 
 ## Production setup
@@ -59,7 +60,16 @@ npm run deploy              # build and deploy with Wrangler
 4. Add a high-entropy Better Auth secret with
    `npx wrangler secret put BETTER_AUTH_SECRET`.
 5. Set `BETTER_AUTH_URL` to the final HTTPS application origin.
-6. Run `npm run db:migrate:remote`, then `npm run deploy`.
+6. Run `bun run db:migrate:remote`, then `bun run deploy`.
+
+Or let CI do it. `.github/workflows/bootstrap-production.yml` creates the D1
+database and R2 bucket and commits the resulting `database_id`; it is manual
+(`workflow_dispatch`) because creating infrastructure should not happen on every
+push. `.github/workflows/deploy.yml` then verifies and deploys on every push to
+`main`. Both need `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as
+repository secrets. `BETTER_AUTH_SECRET` is set once with
+`bunx wrangler secret put BETTER_AUTH_SECRET` and deliberately never travels
+through CI.
 
 Only upload audio you own or have permission to stream. Uploads are capped at
 30 MB each, 200 tracks and 1 GB per account.
