@@ -14,9 +14,10 @@ on:
         required: true
         default: liner-radio-tracks
 
-# Needed to write the resulting database_id back into wrangler.jsonc.
+# contents: write to push the branch, pull-requests: write to open the PR.
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: production-bootstrap
@@ -100,18 +101,36 @@ jobs:
           print(f"Set DB database_id to {db_id}")
           PY
 
-      - name: Commit the change
+      # main is protected, so this opens a pull request rather than pushing
+      # directly. It is also the safer shape: the id change gets reviewed and
+      # runs CI like any other change.
+      - name: Open a pull request with the change
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if git diff --quiet -- wrangler.jsonc; then
             echo "No change to commit."
             exit 0
           fi
+
+          BRANCH="chore/production-database-id"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
           git add wrangler.jsonc
           git commit -m "Point wrangler at the production D1 database"
-          git push
+          git push --force-with-lease -u origin "$BRANCH"
+
+          if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "Point wrangler at the production D1 database" \
+              --body "Automated by the bootstrap workflow: sets the \`DB\` binding's \`database_id\` to the provisioned D1 database."
+          else
+            echo "An open pull request for $BRANCH already exists; it now has the latest id."
+          fi
 
       - name: Summary
         run: |
@@ -124,6 +143,6 @@ jobs:
             echo "Still to do by hand, once:"
             echo ""
             echo '- `bunx wrangler secret put BETTER_AUTH_SECRET` (use `openssl rand -base64 32`)'
-            echo "- Run the **Deploy to production** workflow. A push made by CI does"
-            echo "  not trigger other workflows, so the first deploy needs a manual run."
+            echo "- Review and merge the pull request this opened, which sets the"
+            echo "  production \`database_id\`. Merging it runs the deploy workflow."
           } >> "$GITHUB_STEP_SUMMARY"
