@@ -14,6 +14,19 @@ const SOFT_BAND_SECONDS = 0.12;
 // Kept small enough to be inaudible on music while still closing a gap fast.
 const MAX_RATE_TRIM = 0.025;
 const DRIFT_INTERVAL = 1_000;
+// A seek throws away the buffer and starts a new range request. On a mobile
+// link that request is slow enough to stall again, which grows the drift, which
+// seeks again. Seeking at most this often breaks that loop; between seeks the
+// rate trim closes the gap instead. The window has to be longer than the trim
+// needs to absorb a second of drift (a second at 2.5% takes ~40s), otherwise
+// the cooldown expires mid-recovery and the loop simply runs slower.
+const MIN_SECONDS_BETWEEN_SEEKS = 45;
+// After the element reports it ran dry, give the network a moment before
+// deciding the listener is behind: mid-rebuffer, drift is expected.
+const STARVED_GRACE_MS = 2_500;
+// Far enough out of position that staying smooth no longer matters, e.g. after
+// the tab was backgrounded. Seek regardless of the cooldown.
+const RECOVERY_SEEK_SECONDS = 8;
 
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
 const clampTo = (value: number, min: number, max: number) =>
@@ -60,6 +73,8 @@ export function useSynchronizedPlayer(room: Room | undefined, serverNow: () => n
   const masterLevel = useRef(0.8);
   const levelAnimation = useRef<number | null>(null);
   const mixAnimation = useRef<number | null>(null);
+  const lastStarvedAt = useRef(0);
+  const lastSeekAt = useRef(0);
   const preloadAudio = useRef<HTMLAudioElement | null>(null);
   const preloadAbort = useRef<AbortController | null>(null);
   const autoTried = useRef(false);
@@ -184,13 +199,26 @@ export function useSynchronizedPlayer(room: Room | undefined, serverNow: () => n
 
     const deck = decks.current?.[activeDeck.current];
     if (!deck || deck.audio.paused) return;
-    if (deck.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+    // HAVE_CURRENT_DATA only means the current frame exists. A deck that has
+    // run dry sits exactly there, so requiring "can play forward" is what
+    // actually distinguishes a lagging listener from one that is rebuffering.
+    if (deck.audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
 
     const expected = expectedPosition(current);
     if (expected >= current.current.duration) return;
 
+    const now = performance.now();
     const drift = deck.audio.currentTime - expected;
     if (Math.abs(drift) > HARD_SEEK_SECONDS) {
+      const rebuffering = now - lastStarvedAt.current < STARVED_GRACE_MS;
+      const seekedRecently = now - lastSeekAt.current < MIN_SECONDS_BETWEEN_SEEKS * 1_000;
+      if (Math.abs(drift) <= RECOVERY_SEEK_SECONDS && (rebuffering || seekedRecently)) {
+        // Trim the rate instead of seeking: slower to converge, but it keeps
+        // the buffer we already have rather than starting the stall again.
+        deck.audio.playbackRate = clampTo(1 - drift * 0.05, 1 - MAX_RATE_TRIM, 1 + MAX_RATE_TRIM);
+        return;
+      }
+      lastSeekAt.current = now;
       deck.audio.currentTime = seekTarget(current, expected);
       deck.audio.playbackRate = 1;
     } else if (Math.abs(drift) > SOFT_BAND_SECONDS) {
@@ -362,28 +390,51 @@ export function useSynchronizedPlayer(room: Room | undefined, serverNow: () => n
 
     if (!nextTrack || nextTrack.key === room?.current?.key) return;
     const connection = (
-      navigator as Navigator & { connection?: { saveData?: boolean } }
+      navigator as Navigator & {
+        connection?: { saveData?: boolean; effectiveType?: string };
+      }
     ).connection;
     if (connection?.saveData) return;
+    // On a slow link the next song is not worth the bandwidth it would take
+    // from the one currently playing.
+    if (connection?.effectiveType && /(^|-)2g$|^3g$/.test(connection.effectiveType)) return;
 
     const controller = new AbortController();
     preloadAbort.current = controller;
-    void queryClient
-      .fetchQuery(trackPlaybackQueryOptions(nextTrack.id))
-      .then((grant) => {
-        if (controller.signal.aborted) return;
-        const audio = new Audio();
-        audio.preload = "auto";
-        audio.src = new URL(grant.url, location.origin).href;
-        audio.load();
-        preloadAudio.current = audio;
-      })
-      // Preloading is opportunistic. A failure is retried normally if the song
-      // becomes current and must never interrupt music that is already playing.
-      .catch(() => undefined);
+
+    // Wait until the current track is comfortably buffered. Downloading the
+    // next one over a mobile link while this one is still filling is what makes
+    // playback choppy on connect.
+    let waitTimer: number | undefined;
+    const startWhenCurrentIsSafe = (attempt = 0) => {
+      if (controller.signal.aborted) return;
+      const deck = decks.current?.[activeDeck.current];
+      const ready = deck && deck.audio.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA;
+      // Give up waiting eventually; a track that never reports "enough" should
+      // not block preloading forever.
+      if (!ready && attempt < 30) {
+        waitTimer = window.setTimeout(() => startWhenCurrentIsSafe(attempt + 1), 1_000);
+        return;
+      }
+      void queryClient
+        .fetchQuery(trackPlaybackQueryOptions(nextTrack.id))
+        .then((grant) => {
+          if (controller.signal.aborted) return;
+          const audio = new Audio();
+          audio.preload = "auto";
+          audio.src = new URL(grant.url, location.origin).href;
+          audio.load();
+          preloadAudio.current = audio;
+        })
+        // Preloading is opportunistic. A failure is retried normally if the song
+        // becomes current and must never interrupt music that is already playing.
+        .catch(() => undefined);
+    };
+    startWhenCurrentIsSafe();
 
     return () => {
       controller.abort();
+      window.clearTimeout(waitTimer);
       if (preloadAbort.current === controller) preloadAbort.current = null;
     };
   }, [nextTrack?.id, nextTrack?.key, queryClient, room?.current?.key]);
@@ -412,14 +463,21 @@ export function useSynchronizedPlayer(room: Room | undefined, serverNow: () => n
   useEffect(() => {
     const players = ensureDecks();
     const resync = () => void sync();
+    const starved = () => {
+      lastStarvedAt.current = performance.now();
+    };
     for (const deck of players) {
       deck.audio.addEventListener("ended", resync);
       deck.audio.addEventListener("playing", correctDrift);
+      deck.audio.addEventListener("waiting", starved);
+      deck.audio.addEventListener("stalled", starved);
     }
     return () => {
       for (const deck of players) {
         deck.audio.removeEventListener("ended", resync);
         deck.audio.removeEventListener("playing", correctDrift);
+        deck.audio.removeEventListener("waiting", starved);
+        deck.audio.removeEventListener("stalled", starved);
       }
     };
   }, [correctDrift, ensureDecks, sync]);
