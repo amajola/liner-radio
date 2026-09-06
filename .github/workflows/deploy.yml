@@ -43,6 +43,23 @@ jobs:
       - name: Verify
         run: bun run check
 
+      # TEMPORARY: alchemy deploy is failing with a persistent "Unauthorized:
+      # Authentication error" (Cloudflare code 10000). That error is normally a
+      # transient flake, but it's now repeated identically across independent
+      # runs, which points at the token itself rather than the client. This
+      # step bypasses alchemy/wrangler entirely and asks Cloudflare directly
+      # whether the token is valid, so we get its real diagnosis instead of
+      # alchemy's generic retry-exhausted error. Remove once this is resolved.
+      - name: Debug - verify Cloudflare token
+        run: |
+          curl -sS -o /tmp/cf-verify.json -w '%{http_code}\n' \
+            -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json"
+          cat /tmp/cf-verify.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
       - name: Deploy ${{ env.STAGE }}
         # --adopt lets the first prod run take ownership of the resources
         # previously created by Wrangler. It is harmless after state exists.
