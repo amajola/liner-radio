@@ -127,6 +127,38 @@ test("a crossfade longer than the track still schedules a non-negative advance",
   assert.equal(nextAdvanceAt(started), 500);
 });
 
+test("a rebuffering listener is not seeked into a worse stall", () => {
+  // A seek drops the buffer and starts a new range request. On a mobile link
+  // that stalls again, which grows the drift, which seeks again.
+  assert.match(player, /HTMLMediaElement\.HAVE_FUTURE_DATA/);
+  assert.match(player, /addEventListener\("waiting", starved\)/);
+  assert.match(player, /addEventListener\("stalled", starved\)/);
+  assert.match(player, /MIN_SECONDS_BETWEEN_SEEKS/);
+  assert.match(player, /STARVED_GRACE_MS/);
+  // Being far out of position still corrects immediately, cooldown or not.
+  assert.match(player, /RECOVERY_SEEK_SECONDS/);
+  assert.match(player, /Math\.abs\(drift\) <= RECOVERY_SEEK_SECONDS && \(rebuffering \|\| seekedRecently\)/);
+
+  // The cooldown must outlast the trim's recovery time, or it expires
+  // mid-recovery and the seek loop just runs slower.
+  const seconds = Number(/MIN_SECONDS_BETWEEN_SEEKS = (\d+)/.exec(player)[1]);
+  const trim = Number(/MAX_RATE_TRIM = ([\d.]+)/.exec(player)[1]);
+  const hard = Number(/HARD_SEEK_SECONDS = ([\d.]+)/.exec(player)[1]);
+  assert.ok(
+    seconds > hard / trim,
+    `a ${seconds}s cooldown cannot absorb ${hard}s of drift at ${trim * 100}% trim`,
+  );
+});
+
+test("the next track waits for the current one to be comfortably buffered", () => {
+  // Downloading the next song over a mobile link while the current one is
+  // still filling is what makes playback choppy on connect.
+  assert.match(player, /HAVE_ENOUGH_DATA/);
+  assert.match(player, /startWhenCurrentIsSafe/);
+  assert.match(player, /effectiveType/);
+  assert.match(player, /saveData/);
+});
+
 test("listeners correct drift by trimming rate before resorting to a seek", () => {
   assert.match(player, /HARD_SEEK_SECONDS/);
   assert.match(player, /playbackRate = clampTo/);

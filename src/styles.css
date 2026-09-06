@@ -1508,6 +1508,49 @@ input {
   font-size: 10px;
 }
 
+/* The phone's stand-ins for the two lobby panels: big targets carrying the
+   count, so the page still says what you have without listing it. */
+.lobby-actions {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-height: 0;
+}
+
+.lobby-action {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  cursor: pointer;
+  text-align: left;
+}
+
+.lobby-action:hover {
+  border-color: var(--ink);
+}
+
+.lobby-action > span {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.lobby-action > strong {
+  min-width: 28px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
 /* ---------- Modals ---------- */
 
 .modal-layer {

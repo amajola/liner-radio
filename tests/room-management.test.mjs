@@ -16,6 +16,7 @@ const roomView = await read("../src/features/radio/components/RoomView.tsx");
 const settingsModal = await read("../src/features/radio/components/RoomSettingsModal.tsx");
 const closedModal = await read("../src/features/radio/components/RoomClosedModal.tsx");
 const lobby = await read("../src/features/radio/components/Lobby.tsx");
+const ownedRooms = await read("../src/features/radio/components/OwnedRooms.tsx");
 const mutations = await read("../src/features/radio/use-room-mutations.ts");
 const css = await read("../src/styles.css");
 
@@ -109,7 +110,26 @@ test("room management lives in a modal, and deleting asks twice", () => {
   assert.match(settingsModal, /Yes, delete/);
   assert.match(roomView, /<RoomSettingsModal/);
   assert.match(lobby, /<RoomSettingsModal/);
-  assert.match(lobby, /owned-manage/);
+  assert.match(ownedRooms, /owned-manage/);
+  assert.match(ownedRooms, /onManage/);
+});
+
+test("on a phone the lobby lists live in modals, not inline", () => {
+  // No list, no empty state, no loading row on the home screen: just two
+  // buttons carrying counts, with the lists behind modals.
+  assert.match(lobby, /compact \? \(\s*<div className="lobby-actions">/s);
+  assert.match(lobby, /<RoomsModal/);
+  assert.match(lobby, /onClick=\{\(\) => setShowingRooms\(true\)\}/);
+  assert.match(lobby, /onClick=\{\(\) => setBrowsing\(true\)\}/);
+  // The panels, which carry the inline lists, are the non-compact branch only.
+  const compactBranch = lobby.slice(
+    lobby.indexOf('className="lobby-actions"'),
+    lobby.indexOf('className="lobby-panels"'),
+  );
+  assert.doesNotMatch(compactBranch, /OwnedRoomsList|LibraryQuickView/);
+  // Both modals render the same list the desktop panel uses.
+  assert.match(ownedRooms, /export function RoomsModal/);
+  assert.match(ownedRooms, /<OwnedRoomsList \{\.\.\.list\} \/>/);
 });
 
 test("the lobby stays fixed: entry forms move into a modal before it can overflow", () => {
