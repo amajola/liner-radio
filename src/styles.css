@@ -1817,17 +1817,9 @@ input {
 }
 
 .provider-mark {
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  font: 800 13px/1 Arial, sans-serif;
-}
-
-.provider-google {
-  color: #306fd1;
-  background: #eef4ff;
+  width: 18px;
+  height: 18px;
+  flex: none;
 }
 
 .auth-divider {
