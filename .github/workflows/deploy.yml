@@ -57,8 +57,15 @@ jobs:
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H "Content-Type: application/json"
           cat /tmp/cf-verify.json
+          echo
+          echo "Configured CLOUDFLARE_ACCOUNT_ID: $CLOUDFLARE_ACCOUNT_ID"
+          echo "Accounts this token can see:"
+          curl -sS -X GET "https://api.cloudflare.com/client/v4/accounts" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H "Content-Type: application/json"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy ${{ env.STAGE }}
         # --adopt lets the first prod run take ownership of the resources
