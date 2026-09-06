@@ -1,28 +1,32 @@
-name: Deploy to production
+name: Deploy environments
 
 on:
   push:
     branches: [main]
-  # Lets you redeploy the current main without pushing an empty commit.
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, closed]
   workflow_dispatch:
 
-# D1 migrations must not run concurrently. Deploys are queued rather than
-# cancelled: an in-flight migration should be allowed to finish, not killed
-# halfway through leaving the schema in an unknown state.
 concurrency:
-  group: production-deploy
+  group: deploy-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: read
 
+env:
+  STAGE: >-
+    ${{ github.event_name == 'pull_request'
+      && format('pr-{0}', github.event.number)
+      || 'prod' }}
+
 jobs:
   deploy:
+    if: github.event.action != 'closed' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    environment: production
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    environment:
+      name: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,22 +34,46 @@ jobs:
         with:
           bun-version: 1.4.0
 
-      # The test script runs `node --experimental-strip-types`, so Node is still
-      # needed alongside Bun. package.json requires >=22.13.0.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - run: bun install --frozen-lockfile
 
-      # Typecheck, the full test suite and a production build all run before
-      # anything is allowed near production.
       - name: Verify
         run: bun run check
 
-      # Schema first: the new Worker code may depend on the new columns.
-      - name: Apply D1 migrations
-        run: bun run db:migrate:remote
+      - name: Deploy ${{ env.STAGE }}
+        # --adopt lets the first prod run take ownership of the resources
+        # previously created by Wrangler. It is harmless after state exists.
+        run: bun alchemy deploy --stage "${{ env.STAGE }}" --yes ${{ env.STAGE == 'prod' && '--adopt' || '' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          AUTH_EMAIL_FROM: ${{ vars.AUTH_EMAIL_FROM }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
 
-      - name: Deploy Worker
-        run: bun run deploy
+  cleanup-preview:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    environment:
+      name: preview
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - run: bun install --frozen-lockfile
+
+      - name: Refuse production cleanup
+        run: test "${{ env.STAGE }}" != prod
+
+      - name: Destroy ${{ env.STAGE }}
+        run: bun alchemy destroy --stage "${{ env.STAGE }}" --yes
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

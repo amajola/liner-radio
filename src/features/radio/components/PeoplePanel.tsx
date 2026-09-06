@@ -31,7 +31,7 @@ export function PeopleQuickView({ room, onOpen }: { room: Room; onOpen: () => vo
             key={person.id}
             title={person.role === "host" ? `${person.name} · Host` : person.name}
           >
-            <UserRound size={14} />
+            {person.image ? <img className="person-avatar" src={person.image} alt="" /> : <UserRound size={14} />}
             {person.name}
           </span>
         ))}
@@ -69,7 +69,7 @@ export function PeopleModal({
       <div className="member-list">
         {room.members.map((person) => (
           <div className="member-row" key={person.id}>
-            <UserRound size={17} />
+            {person.image ? <img className="person-avatar" src={person.image} alt="" /> : <UserRound size={17} />}
             <span>
               <strong>{person.name}</strong>
               <small>{person.role === "host" ? "Host" : "Listener"}</small>

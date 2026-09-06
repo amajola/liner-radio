@@ -2,7 +2,13 @@ import { queryOptions } from "@tanstack/react-query";
 import type { Room } from "../../../lib/radio/model";
 import { apiRequest } from "../../shared/http";
 
-export type SessionUser = { id: string; name: string; email?: string };
+export type SessionUser = {
+  id: string;
+  name: string;
+  email?: string;
+  emailVerified?: boolean;
+  image?: string | null;
+};
 export type RoomSummary = { id: string; name: string };
 export type RoomsResponse = {
   user: SessionUser;

@@ -17,6 +17,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "worker/**/*.ts", "db/**/*.ts", "lib/**/*.ts", "vite.config.ts", "drizzle.config.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "worker/**/*.ts", "db/**/*.ts", "lib/**/*.ts", "alchemy.run.ts", "vite.config.ts", "drizzle.config.ts"],
   "exclude": ["node_modules", "dist", "app", "components", "hooks", "build", "scripts"]
 }

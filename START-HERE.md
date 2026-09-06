@@ -1,7 +1,8 @@
 # Start here
 
-Run `bun run db:migrate:local`, followed by `bun run dev`, then open
-<http://localhost:5173>.
+Run `bun install`, sign in once with `bun alchemy login`, then run `bun run dev`
+and open <http://localhost:5173>. Alchemy creates the local D1, R2, Durable
+Object, migrations, and auth secret automatically.
 
 The current architecture is intentionally independent of any hosted application
 builder or third-party identity dispatcher. Better Auth owns user sessions, D1

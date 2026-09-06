@@ -7,8 +7,9 @@ import type { Env } from "./env";
 import type { ActionResult } from "./room-channel";
 import { RequestFailure, type ApiHandler } from "./http";
 import { handleTrackRequest } from "./tracks";
+import { handleProfileRequest } from "./profile";
 
-type Identity = { readonly id: string; readonly name: string };
+type Identity = { readonly id: string; readonly name: string; readonly image?: string | null };
 
 function json(value: unknown, status = 200) {
   return Response.json(value, {
@@ -26,7 +27,11 @@ async function identity(request: Request, env: Env): Promise<Identity> {
     headers: request.headers,
   });
   if (!session) fail("Sign in to join a room.", 401);
-  return { id: session.user.id, name: session.user.name.slice(0, 80) };
+  return {
+    id: session.user.id,
+    name: session.user.name.slice(0, 80),
+    image: session.user.image,
+  };
 }
 
 function roomChannel(env: Env, code: string) {
@@ -177,12 +182,19 @@ export function createApiHandler(env: Env): ApiHandler {
     if (url.pathname === "/api/health" && request.method === "GET") {
       return json({ status: "ok" });
     }
+    if (url.pathname === "/api/account/providers" && request.method === "GET") {
+      return json({
+        google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
+      });
+    }
     if (url.pathname === "/api/radio" && request.method === "GET") {
       return listOrReadRoom(request, env);
     }
     if (url.pathname === "/api/radio" && request.method === "POST") {
       return mutateRoom(request, env);
     }
+    const profileResponse = await handleProfileRequest(request, env);
+    if (profileResponse) return profileResponse;
     const trackResponse = await handleTrackRequest(request, env);
     if (trackResponse) return trackResponse;
     return json({ error: "Not found." }, 404);

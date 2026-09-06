@@ -7,4 +7,8 @@ export interface Env {
   readonly ROOMS: DurableObjectNamespace<RoomChannel>;
   readonly BETTER_AUTH_SECRET: string;
   readonly BETTER_AUTH_URL?: string;
+  readonly RESEND_API_KEY?: string;
+  readonly AUTH_EMAIL_FROM?: string;
+  readonly GOOGLE_CLIENT_ID?: string;
+  readonly GOOGLE_CLIENT_SECRET?: string;
 }

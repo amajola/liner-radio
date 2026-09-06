@@ -15,7 +15,7 @@ export function RadioApplication({ sessionUser }: { sessionUser: SessionUser }) 
   return (
     <MotionConfig reducedMotion="user" transition={spring}>
       <div className="app-shell">
-        <AppHeader userName={sessionUser.name} />
+        <AppHeader user={sessionUser} />
         <Toast />
         <main className="app-stage">
           {activeRoomId ? (

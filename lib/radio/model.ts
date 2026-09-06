@@ -34,6 +34,7 @@ export type Entry = Track & {
 export type Member = {
   id: string;
   name: string;
+  image?: string | null;
   role: "host" | "listener";
   canRequest: boolean;
 };
