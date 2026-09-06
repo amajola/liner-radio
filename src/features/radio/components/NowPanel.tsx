@@ -40,6 +40,13 @@ export function NowPanel(props: Props) {
     : 0;
   const progress = duration > 0 ? (position / duration) * 100 : 0;
 
+  /* Starting a stopped room means promoting the first queued song, and "next"
+     is the only action that fills `current` — "resume" rejects an empty deck
+     outright. Without this the host queues music and finds Play dead, with
+     "Skip to the next song" as the sole undiscoverable way to begin. */
+  const startsProgramme = !room.current && room.queue.length > 0;
+  const playAction = room.playing ? "pause" : room.current ? "resume" : "next";
+
   return (
     <section className="room-column now-column">
       <div className="column-heading">
@@ -67,7 +74,12 @@ export function NowPanel(props: Props) {
 
         <div className="current-track">
           <h1 title={room.current?.title}>{room.current?.title || "Nothing playing yet"}</h1>
-          <p title={room.current?.artist}>{room.current?.artist || "Queue a song to start the programme."}</p>
+          <p title={room.current?.artist}>
+            {room.current?.artist ||
+              (startsProgramme
+                ? "Press play to start the programme."
+                : "Queue a song to start the programme.")}
+          </p>
         </div>
 
         <div className="track-progress">
@@ -83,16 +95,16 @@ export function NowPanel(props: Props) {
         {props.isHost && (
           <div className="transport">
             <button
-              className="transport-primary"
+              className="btn btn--primary btn--xl"
               type="button"
-              disabled={props.busy || !room.current}
-              onClick={() => props.act(room.playing ? "pause" : "resume")}
+              disabled={props.busy || (!room.current && !startsProgramme)}
+              onClick={() => props.act(playAction)}
             >
               {room.playing ? <Pause size={20} /> : <Play size={20} />}
               {room.playing ? "Pause" : "Play"}
             </button>
             <button
-              className="transport-secondary"
+              className="btn btn--secondary btn--xl"
               type="button"
               disabled={props.busy || !room.queue.length}
               onClick={() => props.act("next")}

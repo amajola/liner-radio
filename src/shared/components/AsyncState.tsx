@@ -2,7 +2,7 @@ import { LoaderCircle, RefreshCw } from "lucide-react";
 
 export function LoadingState({ label }: { label: string }) {
   return (
-    <div className="query-state" role="status">
+    <div className="surface surface--dashed query-state" role="status">
       <LoaderCircle className="spin" size={20} />
       <span>{label}</span>
     </div>
@@ -17,9 +17,9 @@ export function ErrorState({
   retry: () => void;
 }) {
   return (
-    <div className="query-state query-error" role="alert">
+    <div className="surface surface--dashed query-state query-error" role="alert">
       <span>{message}</span>
-      <button type="button" onClick={retry}>
+      <button className="btn btn--sm btn--on-inverse" type="button" onClick={retry}>
         <RefreshCw size={15} /> Retry
       </button>
     </div>
@@ -27,7 +27,7 @@ export function ErrorState({
 }
 
 export function EmptyState({ children }: { children: React.ReactNode }) {
-  return <p className="empty-state">{children}</p>;
+  return <p className="surface surface--dashed empty-state">{children}</p>;
 }
 
 export function QueryFreshness({

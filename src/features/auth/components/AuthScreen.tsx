@@ -137,16 +137,16 @@ export function AuthScreen() {
           </p>
 
           {error && (
-            <div className="inline-error" role="alert">
-              {error}<button type="button" onClick={clearFeedback} aria-label="Dismiss error"><X size={16} /></button>
+            <div className="callout callout--danger callout--between" role="alert">
+              {error}<button className="btn btn--bare" type="button" onClick={clearFeedback} aria-label="Dismiss error"><X size={16} /></button>
             </div>
           )}
-          {notice && <div className="inline-success" role="status"><CheckCircle2 size={17} />{notice}</div>}
+          {notice && <div className="callout callout--positive" role="status"><CheckCircle2 size={17} />{notice}</div>}
 
           {(mode === "sign-in" || mode === "sign-up") && providers.data?.google && (
             <>
               <div className="provider-buttons">
-                {providers.data.google && <button type="button" onClick={() => auth.socialSignIn.mutate("google")} disabled={busy}>
+                {providers.data.google && <button className="btn btn--ghost btn--lg" type="button" onClick={() => auth.socialSignIn.mutate("google")} disabled={busy}>
                   <GoogleIcon className="provider-mark" />Continue with Google
                 </button>}
               </div>
@@ -159,12 +159,12 @@ export function AuthScreen() {
           {(mode === "sign-in" || mode === "sign-up" || mode === "reset") && <label>Password<input type="password" autoComplete={mode === "sign-in" ? "current-password" : "new-password"} value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required /></label>}
           {mode === "reset" && <label>Confirm password<input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} required /></label>}
 
-          <button className="primary-button" disabled={busy || (mode === "reset" && !resetToken)}>
+          <button className="btn btn--primary btn--lg" disabled={busy || (mode === "reset" && !resetToken)}>
             {busy && <LoaderCircle className="spin" size={17} />}
             {mode === "sign-in" && "Sign in"}{mode === "sign-up" && "Create account"}{mode === "forgot" && "Send reset link"}{mode === "reset" && "Save new password"}{mode === "verify" && "Resend verification email"}
           </button>
-          {mode === "sign-in" && <button className="text-action" type="button" onClick={() => changeMode("forgot")}>Forgot your password?</button>}
-          <button className="text-action" type="button" onClick={() => changeMode(mode === "sign-up" ? "sign-in" : mode === "sign-in" ? "sign-up" : "sign-in")}>
+          {mode === "sign-in" && <button className="btn btn--link" type="button" onClick={() => changeMode("forgot")}>Forgot your password?</button>}
+          <button className="btn btn--link" type="button" onClick={() => changeMode(mode === "sign-up" ? "sign-in" : mode === "sign-in" ? "sign-up" : "sign-in")}>
             {mode === "sign-up" ? "Already have an account? Sign in" : mode === "sign-in" ? "New here? Create an account" : "Back to sign in"}
           </button>
         </form>

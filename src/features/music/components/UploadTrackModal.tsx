@@ -147,7 +147,7 @@ export function UploadTrackModal({
           <span>I own this audio or have permission to stream it to this room.</span>
         </label>
 
-        <button className="primary-button" disabled={upload.isPending || !file}>
+        <button className="btn btn--primary btn--lg" disabled={upload.isPending || !file}>
           {upload.isPending ? <LoaderCircle className="spin" size={16} /> : <Upload size={16} />}
           {upload.isPending ? "Uploading…" : "Add to library"}
         </button>

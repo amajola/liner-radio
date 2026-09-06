@@ -12,7 +12,7 @@ export function Toast() {
       role={toast.kind === "error" ? "alert" : "status"}
     >
       <span>{toast.message}</span>
-      <button type="button" onClick={clearToast} aria-label="Dismiss message">
+      <button className="btn btn--bare" type="button" onClick={clearToast} aria-label="Dismiss message">
         <X size={17} />
       </button>
     </div>

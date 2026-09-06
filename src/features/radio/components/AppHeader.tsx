@@ -18,14 +18,14 @@ export function AppHeader({ user }: { user: SessionUser }) {
         <strong>RADIO</strong>
       </button>
       <div className="account-chip">
-        <button className="account-profile" type="button" onClick={() => setAccountOpen(true)} aria-label="Edit profile">
-          <span className="profile-avatar">
+        <button className="btn btn--ghost btn--sm account-profile" type="button" onClick={() => setAccountOpen(true)} aria-label="Edit profile">
+          <span className="avatar">
             {user.image ? <img src={user.image} alt="" /> : <UserRound size={16} />}
           </span>
           <span>{user.name}</span>
         </button>
         <button
-          className="account-sign-out"
+          className="btn btn--ghost btn--sm btn--icon btn--circle"
           type="button"
           onClick={() => signOut.mutate()}
           disabled={signOut.isPending}

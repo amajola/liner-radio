@@ -75,7 +75,7 @@ export function MixerModal({
           </div>
 
           <button
-            className={`duck-button ${room.ducked ? "is-ducked" : ""}`}
+            className={`btn btn--secondary btn--block ${room.ducked ? "is-ducked" : ""}`}
             type="button"
             disabled={busy}
             onClick={() => act("duck", { value: !room.ducked })}
@@ -115,10 +115,10 @@ export function MixerModal({
           Stop or resume audio here without changing what anyone else hears.
         </p>
         <div className="local-controls">
-          <button type="button" onClick={() => localAction("play")}>
+          <button className="btn btn--ghost btn--sm" type="button" onClick={() => localAction("play")}>
             <Play size={17} /> Play here
           </button>
-          <button type="button" onClick={() => localAction("pause")}>
+          <button className="btn btn--ghost btn--sm" type="button" onClick={() => localAction("pause")}>
             <Pause size={17} /> Pause here
           </button>
         </div>

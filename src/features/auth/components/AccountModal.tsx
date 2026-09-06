@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Camera, LoaderCircle, Trash2, UserRound } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import { apiRequest } from "../../../shared/http";
 import { Modal } from "../../../shared/components/Modal";
 import { useUiStore } from "../../../stores/ui-store";
@@ -13,6 +13,8 @@ type Props = {
   readonly onClose: () => void;
   readonly user: SessionUser;
 };
+
+const MAX_PICTURE_BYTES = 3 * 1024 * 1024;
 
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("");
@@ -74,43 +76,48 @@ export function AccountModal({ open, onClose, user }: Props) {
     save.mutate();
   }
 
+  function pickImage(event: ChangeEvent<HTMLInputElement>) {
+    const next = event.target.files?.[0] || null;
+    if (next && next.size > MAX_PICTURE_BYTES) {
+      showError("Profile pictures can be up to 3 MB.");
+      event.target.value = "";
+      return;
+    }
+    setImage(next);
+    setRemoveImage(false);
+  }
+
+  function clearImage() {
+    setImage(null);
+    setRemoveImage(true);
+  }
+
   return (
     <Modal open={open} onClose={onClose} title="Your profile" subtitle="How people see you in listening rooms.">
       <form className="profile-form" onSubmit={submit}>
         <div className="profile-picture-editor">
-          <div className="profile-avatar profile-avatar-large">
+          <div className="avatar avatar--lg">
             {preview ? <img src={preview} alt="Profile preview" /> : initials(name) || <UserRound />}
           </div>
-          <div>
-            <label className="secondary-button image-picker">
-              <Camera size={17} />Choose picture
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(event) => {
-                  const next = event.target.files?.[0] || null;
-                  if (next && next.size > 3 * 1024 * 1024) {
-                    showError("Profile pictures can be up to 3 MB.");
-                    event.target.value = "";
-                    return;
-                  }
-                  setImage(next);
-                  setRemoveImage(false);
-                }}
-              />
-            </label>
-            {(preview || image) && (
-              <button className="text-action profile-remove" type="button" onClick={() => { setImage(null); setRemoveImage(true); }}>
-                <Trash2 size={15} />Remove picture
-              </button>
-            )}
+          <div className="profile-picture-controls">
+            <div className="profile-picture-actions">
+              <label className="btn btn--ghost btn--sm image-picker">
+                <Camera size={17} />Choose picture
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={pickImage} />
+              </label>
+              {(preview || image) && (
+                <button className="btn btn--link" type="button" onClick={clearImage}>
+                  <Trash2 size={15} />Remove picture
+                </button>
+              )}
+            </div>
             <small>JPEG, PNG or WebP. Maximum 3 MB.</small>
           </div>
         </div>
         <label>Display name<input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} required /></label>
         <label>Email<input value={user.email || ""} disabled /></label>
         <p className="verification-state">{user.emailVerified ? "Email verified" : "Email awaiting verification"}</p>
-        <button className="primary-button" disabled={save.isPending}>
+        <button className="btn btn--primary btn--lg" disabled={save.isPending}>
           {save.isPending && <LoaderCircle className="spin" size={17} />}Save profile
         </button>
       </form>

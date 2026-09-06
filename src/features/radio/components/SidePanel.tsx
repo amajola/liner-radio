@@ -49,7 +49,7 @@ export function SidePanel(props: Props) {
         <span>{isHost ? room.requests.length : visibleRequests.length}</span>
       </div>
 
-      <div className="column-scroll list-scroll">
+      <div className="scroll-region column-scroll list-scroll">
         {isHost || canRequest ? (
           <LibraryQuickView
             ownerId={host?.id ?? ""}
@@ -86,6 +86,7 @@ export function SidePanel(props: Props) {
               {isHost && (
                 <div className="row-actions">
                   <button
+                    className="btn btn--quiet btn--xs btn--icon"
                     type="button"
                     disabled={props.busy}
                     onClick={() => props.act("approve", { key: track.key })}
@@ -94,6 +95,7 @@ export function SidePanel(props: Props) {
                     <Check size={18} />
                   </button>
                   <button
+                    className="btn btn--quiet btn--xs btn--icon"
                     type="button"
                     disabled={props.busy}
                     onClick={() => props.act("reject", { key: track.key })}

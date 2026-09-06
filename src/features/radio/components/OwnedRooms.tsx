@@ -41,7 +41,7 @@ export function OwnedRoomsList({ rooms, busy, onOpen, onManage }: ListProps) {
             </button>
             <button
               type="button"
-              className="owned-manage"
+              className="btn btn--quiet btn--sm btn--icon"
               onClick={() => onManage(room)}
               aria-label={`Manage ${room.name}`}
               title="Room settings"

@@ -83,7 +83,7 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
     >
       <motion.div
         ref={surface}
-        className={`modal-surface modal-${size}`}
+        className={`surface surface--lg modal-surface modal-${size}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -97,7 +97,7 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
             <h2 id={titleId}>{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
-          <button type="button" onClick={onClose} aria-label="Close">
+          <button className="btn btn--ghost btn--sm btn--icon" type="button" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </header>

@@ -89,7 +89,7 @@ export function RoomView({ roomId, sessionUser }: { roomId: string; sessionUser:
   return (
     <div className="room-shell">
       <div className="room-bar">
-        <button className="icon-text" type="button" onClick={exitRoom}>
+        <button className="btn btn--quiet btn--sm room-exit" type="button" onClick={exitRoom}>
           <ArrowLeft size={17} /> Rooms
         </button>
         <div className="room-identity">
@@ -106,7 +106,7 @@ export function RoomView({ roomId, sessionUser }: { roomId: string; sessionUser:
             icons tucked into a corner. */}
         <div className="room-bar-actions">
           <button
-            className="room-action room-action-primary"
+            className="btn btn--accent"
             type="button"
             onClick={() => void copyInvite()}
           >
@@ -114,7 +114,7 @@ export function RoomView({ roomId, sessionUser }: { roomId: string; sessionUser:
           </button>
           {isHost && (
             <button
-              className="room-action"
+              className="btn btn--secondary"
               type="button"
               onClick={() => setSettingsOpen(true)}
             >
@@ -125,7 +125,7 @@ export function RoomView({ roomId, sessionUser }: { roomId: string; sessionUser:
       </div>
 
       {channel.status === "reconnecting" && (
-        <div className="stale-data-banner" role="status">
+        <div className="callout callout--warning stale-data-banner" role="status">
           Live link reconnecting. Falling back to periodic refresh.
         </div>
       )}

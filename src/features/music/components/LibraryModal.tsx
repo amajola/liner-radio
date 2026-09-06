@@ -48,7 +48,7 @@ export function LibraryModal({
       subtitle={`${library.data?.tracks.length ?? 0} track${library.data?.tracks.length === 1 ? "" : "s"}`}
       footer={
         canUpload ? (
-          <button className="secondary-button" type="button" onClick={onUpload}>
+          <button className="btn btn--secondary btn--lg" type="button" onClick={onUpload}>
             <Upload size={16} /> Upload music
           </button>
         ) : undefined
@@ -91,7 +91,7 @@ export function LibraryModal({
             </div>
             {onPick && (
               <button
-                className="add-button"
+                className="btn btn--ghost btn--sm btn--icon"
                 type="button"
                 aria-label={`${actionLabel} ${track.title}`}
                 title={actionLabel}

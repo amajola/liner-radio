@@ -21,7 +21,7 @@ export function QueuePanel({
         <strong>UP NEXT</strong>
         <span>{room.queue.length}</span>
       </div>
-      <div className="column-scroll list-scroll">
+      <div className="scroll-region column-scroll list-scroll">
         {!room.queue.length && (
           <EmptyState>
             {isHost
@@ -52,6 +52,7 @@ export function QueuePanel({
               {isHost && (
                 <div className="row-actions">
                   <button
+                    className="btn btn--quiet btn--xs btn--icon"
                     type="button"
                     disabled={busy || index === 0}
                     onClick={() => act("move", { key: track.key, direction: -1 })}
@@ -60,6 +61,7 @@ export function QueuePanel({
                     <ArrowUp size={16} />
                   </button>
                   <button
+                    className="btn btn--quiet btn--xs btn--icon"
                     type="button"
                     disabled={busy || index === room.queue.length - 1}
                     onClick={() => act("move", { key: track.key, direction: 1 })}
@@ -68,6 +70,7 @@ export function QueuePanel({
                     <ArrowDown size={16} />
                   </button>
                   <button
+                    className="btn btn--quiet btn--xs btn--icon"
                     type="button"
                     disabled={busy}
                     onClick={() => act("remove", { key: track.key })}
