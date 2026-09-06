@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { authClient } from "../../auth-client";
+import { apiRequest } from "../../shared/http";
 
 export const authKeys = {
   all: ["auth"] as const,
@@ -19,4 +20,12 @@ export const sessionQueryOptions = () =>
       return result.data;
     },
     staleTime: 30_000,
+  });
+
+export const authProvidersQueryOptions = () =>
+  queryOptions({
+    queryKey: [...authKeys.all, "providers"],
+    queryFn: () =>
+      apiRequest<{ google: boolean }>("/api/account/providers"),
+    staleTime: Infinity,
   });

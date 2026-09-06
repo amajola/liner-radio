@@ -19,6 +19,8 @@ const lobby = await read("../src/features/radio/components/Lobby.tsx");
 const ownedRooms = await read("../src/features/radio/components/OwnedRooms.tsx");
 const mutations = await read("../src/features/radio/use-room-mutations.ts");
 const css = await read("../src/styles.css");
+const tokens = await read("../src/design/tokens.css");
+const primitives = await read("../src/design/primitives.css");
 
 const room = () => ({
   id: "ROOM",
@@ -110,7 +112,7 @@ test("room management lives in a modal, and deleting asks twice", () => {
   assert.match(settingsModal, /Yes, delete/);
   assert.match(roomView, /<RoomSettingsModal/);
   assert.match(lobby, /<RoomSettingsModal/);
-  assert.match(ownedRooms, /owned-manage/);
+  assert.match(ownedRooms, /aria-label=\{`Manage \$\{room\.name\}`\}/);
   assert.match(ownedRooms, /onManage/);
 });
 
@@ -137,19 +139,30 @@ test("the lobby stays fixed: entry forms move into a modal before it can overflo
   assert.match(lobby, /compact \?/);
   assert.match(lobby, /entry-actions/);
   assert.match(css, /\.lobby\s*{[^}]*overflow:\s*hidden/s);
-  assert.match(css, /\.lobby-panel-scroll[^{]*{[^}]*overflow:\s*auto/s);
+  assert.match(primitives, /\.scroll-region\s*{[^}]*overflow:\s*auto/s);
 });
 
 test("invite and settings are labelled buttons, not hidden icons", () => {
   // They used to be transparent 12px text collapsed to bare icons on mobile.
-  assert.match(roomView, /className="room-action room-action-primary"/);
+  // Invite is the accent-toned button; Settings is the outlined one. Both are
+  // full .btn controls, so neither can decay into a bare icon.
+  assert.match(roomView, /className="btn btn--accent"/);
+  assert.match(roomView, /className="btn btn--secondary"/);
   assert.match(roomView, /<UserPlus size=\{17\} \/> Invite/);
   assert.match(roomView, /<Settings size=\{17\} \/> Settings/);
-  assert.doesNotMatch(roomView, /className="icon-text"[\s\S]{0,200}Invite/);
-  // The label must survive the small-screen rule that blanks .icon-text.
-  assert.doesNotMatch(css, /\.room-action[^{]*{[^}]*font-size:\s*0/s);
-  assert.match(css, /\.room-action\s*{[^}]*min-height:\s*38px/s);
-  assert.match(css, /\.room-action-primary\s*{[^}]*background:\s*var\(--accent\)/s);
+  assert.doesNotMatch(roomView, /className="[^"]*btn--quiet[^"]*"[\s\S]{0,200}Invite/);
+  // Only the back control collapses to an icon on a phone. The rule that
+  // blanks a label is scoped to .room-exit and must never reach the actions.
+  const blanked = css.match(/\.[a-z-]+\s*{[^}]*font-size:\s*0[^}]*}/gs) ?? [];
+  assert.deepEqual(
+    blanked.map((rule) => rule.split("{")[0].trim()),
+    [".room-exit"],
+  );
+  // The actions keep a real touch target and the accent fill they had.
+  assert.match(tokens, /--control-md:\s*40px/);
+  assert.match(primitives, /\.btn\s*{[^}]*min-height:\s*var\(--control-md\)/s);
+  assert.match(primitives, /\.btn--accent\s*{[^}]*background:\s*var\(--color-accent\)/s);
+  assert.match(tokens, /--color-accent:\s*var\(--lime-400\)/);
 });
 
 test("the breakpoint hook re-reads on resize, not only on the media query event", async () => {

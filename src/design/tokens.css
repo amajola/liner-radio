@@ -1,0 +1,249 @@
+/* ============================================================================
+   Liner Radio — Design Tokens
+   ----------------------------------------------------------------------------
+   Two tiers, and the distinction is load-bearing:
+
+     Tier 1  PRIMITIVES  raw scale values. Named for what they ARE (--sand-300).
+                         Never referenced outside this file's Tier 2 section.
+     Tier 2  SEMANTIC    role aliases. Named for what they DO (--color-border).
+                         This is the ONLY tier application CSS may reference.
+
+   The rule that keeps the system honest: if a component stylesheet reaches for
+   a Tier 1 token, the system is missing a semantic role — add the role here
+   rather than reaching past it. That indirection is what makes a re-theme a
+   one-file change.
+   ============================================================================ */
+
+@layer tokens {
+  :root {
+    /* ------------------------------------------------------------------
+       TIER 1 — PRIMITIVES
+       ------------------------------------------------------------------ */
+
+    /* Neutral ramp. Warm greige, not grey — every surface in the product
+       sits on this ramp. Steps 50/200/300/700/950 are the originals the
+       interface was designed around and are exact, so the ramp introduced
+       no drift where it matters most. */
+    --sand-50: #f6f5ef;
+    --sand-100: #f0efe8;
+    --sand-200: #ebeae4;
+    --sand-300: #d5d3ca;
+    --sand-400: #c2c0b6;
+    --sand-500: #aeaca2;
+    --sand-600: #8e8c83;
+    --sand-700: #77766f;
+    --sand-800: #56564f;
+    --sand-900: #2c2c28;
+    --sand-950: #171714;
+
+    /* Accent ramp. The lime is the brand's one loud note; the olive steps
+       (600-800) are its readable-on-light counterparts, and 100 is the
+       confirmation fill. */
+    --lime-100: #e3edcf;
+    --lime-400: #dbff45;
+    --lime-500: #cdf22c;
+    --lime-600: #92b400;
+    --lime-700: #587000;
+    --lime-800: #40541d;
+
+    /* Status ramps. Each carries a light fill, a border, and a text-safe
+       dark step, because that is the shape every status surface needs. */
+    --green-100: #edf5ee;
+    --green-300: #a9c5ad;
+    --green-700: #315e3a;
+
+    --amber-50: #fff7df;
+    --amber-100: #fff0c8;
+    --amber-300: #d2a44c;
+    --amber-700: #9b5b18;
+    --amber-800: #744813;
+
+    --red-50: #fdf1ef;
+    --red-100: #f7e4e1;
+    --red-200: #f5d8d4;
+    --red-300: #d4a5a0;
+    --red-500: #ff3b30;
+    --red-600: #ad2e24;
+    --red-700: #9b3d34;
+    --red-800: #792018;
+
+    --white: #ffffff;
+
+    /* Space scale. 4px base with a 2px sub-step, because this interface is
+       dense: gaps below 8px do real work here and rounding them all up to 8
+       would inflate every panel. */
+    --space-0: 0;
+    --space-px: 1px;
+    --space-1: 2px;
+    --space-2: 4px;
+    --space-3: 6px;
+    --space-4: 8px;
+    --space-5: 10px;
+    --space-6: 12px;
+    --space-7: 14px;
+    --space-8: 16px;
+    --space-9: 20px;
+    --space-10: 24px;
+    --space-11: 32px;
+    --space-12: 40px;
+    --space-13: 48px;
+    --space-14: 64px;
+
+    /* Type scale. Nine steps replacing fifteen ad-hoc sizes. Tight at the
+       bottom (10-14px) because that band carries the product's chrome;
+       ratio opens up above 16px where headings live. */
+    --text-3xs: 10px;
+    --text-2xs: 11px;
+    --text-xs: 12px;
+    --text-sm: 13px;
+    --text-md: 14px;
+    --text-lg: 16px;
+    --text-xl: 20px;
+    --text-2xl: 24px;
+    --text-3xl: 32px;
+
+    /* Fluid display sizes. These are viewport-responsive by design — the
+       lobby and auth screens are the product's only editorial moments. */
+    --text-display-sm: clamp(22px, 5cqh, 34px);
+    --text-display-md: clamp(30px, 5.2vw, 62px);
+    --text-display-lg: clamp(55px, 8vw, 116px);
+
+    /* Font families, weights, leading, tracking. */
+    --font-sans: "Avenir Next", "Segoe UI", sans-serif;
+
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --weight-bold: 700;
+    --weight-black: 800;
+
+    --leading-none: 1;
+    --leading-tight: 1.1;
+    --leading-snug: 1.35;
+    --leading-normal: 1.5;
+    --leading-relaxed: 1.6;
+
+    /* Tracking splits in two, because the two jobs are unrelated:
+       display sizes need NEGATIVE optical correction that grows with the
+       size, while uppercase micro-labels need positive tracking to stay
+       legible. Mixing them on one scale is what produced nine one-off
+       values in the original stylesheet. */
+    --tracking-tight: -0.4px;
+    --tracking-normal: 0;
+    --tracking-wide: 0.8px;
+    --tracking-wider: 1.2px;
+    --tracking-widest: 1.8px;
+
+    --tracking-display-sm: -0.8px;
+    --tracking-display-md: -1.8px;
+    --tracking-display-lg: -3px;
+    --tracking-display-xl: -7px;
+
+    /* Radii. Five steps replacing fourteen. */
+    --radius-xs: 4px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-full: 999px;
+
+    /* Control heights. Kept separate from the space scale: these are hit
+       targets, and rounding a touch target is a different decision from
+       rounding a gap. --control-lg is the 44px WCAG 2.5.5 target size. */
+    --control-xs: 28px;
+    --control-sm: 34px;
+    --control-md: 40px;
+    --control-lg: 44px;
+    --control-xl: 48px;
+
+    /* Elevation. */
+    --shadow-sm: 0 7px 20px rgb(0 0 0 / 10%);
+    --shadow-md: 0 16px 44px rgb(0 0 0 / 20%);
+    --shadow-lg: 0 24px 50px rgb(0 0 0 / 17%);
+    --shadow-xl: 0 24px 60px rgb(23 23 20 / 26%);
+
+    /* Motion. */
+    --duration-fast: 140ms;
+    --duration-base: 180ms;
+    --duration-slow: 480ms;
+    --ease-standard: ease;
+    --ease-linear: linear;
+
+    /* Stacking. Every z-index in the product resolves here, so the layering
+       order is readable in one place instead of inferred from six files. */
+    --z-raised: 10;
+    --z-header: 20;
+    --z-nav: 30;
+    --z-modal: 60;
+    --z-toast: 100;
+
+    /* ------------------------------------------------------------------
+       TIER 2 — SEMANTIC ROLES
+       Application CSS references only these.
+       ------------------------------------------------------------------ */
+
+    /* Surfaces */
+    --color-bg: var(--sand-200);
+    --color-surface: var(--sand-50);
+    --color-surface-sunken: var(--sand-100);
+    --color-surface-raised: var(--white);
+    --color-surface-inverse: var(--sand-950);
+    --color-surface-inverse-raised: var(--sand-900);
+    --color-scrim: rgb(23 23 20 / 46%);
+
+    /* Text */
+    --color-text: var(--sand-950);
+    --color-text-muted: var(--sand-700);
+    --color-text-subtle: var(--sand-600);
+    --color-text-inverse: var(--white);
+    --color-text-inverse-muted: var(--sand-400);
+
+    /* Lines */
+    --color-border: var(--sand-300);
+    --color-border-strong: var(--sand-950);
+    --color-border-inverse: var(--sand-800);
+    --color-border-dashed: var(--sand-400);
+
+    /* Brand / interactive accent */
+    --color-accent: var(--lime-400);
+    --color-accent-hover: var(--lime-500);
+    --color-accent-text: var(--lime-600);
+    --color-focus: var(--lime-700);
+
+    /* Status: success */
+    --color-success-surface: var(--green-100);
+    --color-success-border: var(--green-300);
+    --color-success-text: var(--green-700);
+
+    /* Status: positive/olive — the confirmation tone, distinct from success */
+    --color-positive-surface: var(--lime-100);
+    --color-positive-text: var(--lime-800);
+
+    /* Status: warning */
+    --color-warning-surface: var(--amber-100);
+    --color-warning-surface-soft: var(--amber-50);
+    --color-warning-border: var(--amber-300);
+    --color-warning-text: var(--amber-800);
+    --color-warning-text-soft: var(--amber-700);
+
+    /* Status: danger */
+    --color-danger: var(--red-600);
+    --color-danger-surface: var(--red-50);
+    --color-danger-surface-strong: var(--red-200);
+    --color-danger-border: var(--red-300);
+    --color-danger-text: var(--red-800);
+    --color-danger-mark: var(--red-700);
+
+    /* Status: live — deliberately not "danger" despite being red. A live
+       indicator and a destructive action must never share a token, or a
+       palette change to one silently changes the other. */
+    --color-live: var(--red-500);
+    --color-live-idle: var(--sand-500);
+    --color-live-glow: rgb(255 59 48 / 13%);
+
+    /* Interaction */
+    --color-hover-surface: var(--sand-100);
+    --color-hover-surface-strong: var(--sand-200);
+    --color-scrollbar-thumb: var(--sand-500);
+    --opacity-disabled: 0.42;
+    --opacity-busy: 0.72;
+  }
+}

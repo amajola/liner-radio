@@ -90,7 +90,7 @@ export function Lobby({ userId }: { userId: string }) {
       {compact ? (
         <div className="entry-actions">
           <button
-            className="primary-button"
+            className="btn btn--primary btn--lg"
             type="button"
             onClick={() => setEntry("create")}
             disabled={busy}
@@ -98,7 +98,7 @@ export function Lobby({ userId }: { userId: string }) {
             <Radio size={17} /> Host a room
           </button>
           <button
-            className="secondary-button"
+            className="btn btn--secondary btn--lg"
             type="button"
             onClick={() => setEntry("join")}
             disabled={busy}
@@ -108,26 +108,26 @@ export function Lobby({ userId }: { userId: string }) {
         </div>
       ) : (
         <div className="entry-grid">
-          <form className="entry-card entry-card-dark" onSubmit={create}>
+          <form className="surface surface--lg surface--inverse entry-card" onSubmit={create}>
             <Radio size={26} />
             <div>
               <p className="eyebrow">HOST</p>
               <h2>Take the booth</h2>
             </div>
             {createFields}
-            <button className="primary-button primary-light" disabled={busy}>
+            <button className="btn btn--accent btn--lg" disabled={busy}>
               Create a room <Plus size={17} />
             </button>
           </form>
 
-          <form className="entry-card" onSubmit={join}>
+          <form className="surface surface--lg entry-card" onSubmit={join}>
             <Headphones size={26} />
             <div>
               <p className="eyebrow">LISTEN</p>
               <h2>Find your people</h2>
             </div>
             {joinFields}
-            <button className="secondary-button" disabled={busy}>
+            <button className="btn btn--secondary btn--lg" disabled={busy}>
               Join room
             </button>
           </form>
@@ -139,12 +139,12 @@ export function Lobby({ userId }: { userId: string }) {
           counts. Wider screens keep both panels in view. */}
       {compact ? (
         <div className="lobby-actions">
-          <button className="lobby-action" type="button" onClick={() => setShowingRooms(true)}>
+          <button className="surface lobby-action" type="button" onClick={() => setShowingRooms(true)}>
             <ListMusic size={18} />
             <span>Your rooms</span>
             <strong>{ownedRooms.length}</strong>
           </button>
-          <button className="lobby-action" type="button" onClick={() => setBrowsing(true)}>
+          <button className="surface lobby-action" type="button" onClick={() => setBrowsing(true)}>
             <Library size={18} />
             <span>Music library</span>
             <strong>{trackCount}</strong>
@@ -152,7 +152,7 @@ export function Lobby({ userId }: { userId: string }) {
         </div>
       ) : (
       <div className="lobby-panels">
-        <section className="quick-panel lobby-panel">
+        <section className="surface quick-panel lobby-panel">
           <div className="quick-panel">
             <div className="quick-heading">
               <h2>Your rooms</h2>
@@ -167,13 +167,13 @@ export function Lobby({ userId }: { userId: string }) {
                 )}
               </span>
             </div>
-            <div className="lobby-panel-scroll">
+            <div className="scroll-region">
               <OwnedRoomsList {...roomListProps} />
             </div>
           </div>
         </section>
 
-        <section className="quick-panel lobby-panel">
+        <section className="surface quick-panel lobby-panel">
           <LibraryQuickView
             ownerId={userId}
             canUpload
@@ -215,7 +215,7 @@ export function Lobby({ userId }: { userId: string }) {
           }}
         >
           {entry === "join" ? joinFields : createFields}
-          <button className="primary-button" disabled={busy}>
+          <button className="btn btn--primary btn--lg" disabled={busy}>
             {entry === "join" ? (
               <>
                 Join room <Headphones size={16} />

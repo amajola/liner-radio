@@ -6,35 +6,63 @@ A host-led listening room for uploaded music, built as a fixed-viewport React SP
 
 - React 19 and Vite
 - Effect 4 HTTP server APIs
-- Better Auth with email/password sessions
+- Better Auth with verified email/password and Google accounts
 - Drizzle ORM and Cloudflare D1
 - Cloudflare R2 audio storage
 - Cloudflare Workers Static Assets
 - Durable Objects with WebSocket fan-out for live room sync
+- Alchemy infrastructure, local runtime, and staged deployments
 - Native browser audio with synchronized playback and crossfades
 
-The static SPA is served directly from Cloudflare's edge cache. Only `/api/*`
-requests invoke the Worker. Authentication, API routes, and frontend assets all
-use the same origin.
+Authentication, API routes, profile images, and frontend assets all use the
+same Worker origin. Static files are still served by Cloudflare's asset binding.
 
 ## Local development
 
 Requires Bun 1.4 or newer, plus Node.js 22.13 or newer (the test runner uses
-`node --experimental-strip-types`).
+`node --experimental-strip-types`). Sign in to Cloudflare once with
+`bun alchemy login`; Alchemy uses a local workerd runtime for the Worker and
+isolated local D1 and R2 data.
 
 ```sh
 bun install
-cp .dev.vars.example .dev.vars
-bun run db:migrate:local
 bun run dev
 ```
 
-Open <http://localhost:5173>. The Vite development server runs the React client,
-Effect Worker, Better Auth, and locally simulated D1 and R2 storage together.
+Open <http://localhost:5173>. `alchemy dev` runs the React client, Effect Worker,
+Better Auth, and locally simulated D1, R2, and Durable Object storage together.
+The auth secret is generated once per Alchemy stage and kept in Alchemy state.
+Without a `RESEND_API_KEY`, local verification and reset links are printed in
+the terminal by the Worker so the flows can be tested end to end.
 
-The checked-in `.dev.vars` contains a development-only secret so this checkout
-runs immediately. Replace it for your own environment. Never reuse it in
-production.
+## Account services
+
+Email/password accounts must verify their address before signing in. Forgotten
+password links expire through Better Auth, and a successful reset revokes the
+account's other sessions. Signed-in users can edit their display name and upload
+a JPEG, PNG, or WebP profile picture up to 3 MB; pictures are stored in the
+stage's private R2 bucket and served through the Worker.
+
+Set these GitHub environment variables and secrets for both `production` and
+`preview`:
+
+| Name | Kind | Purpose |
+| --- | --- | --- |
+| `AUTH_EMAIL_FROM` | variable | Verified sender, for example `Liner Radio <accounts@example.com>` |
+| `RESEND_API_KEY` | secret | Verification and password-reset delivery |
+| `GOOGLE_CLIENT_ID` | variable | Google OAuth web client ID |
+| `GOOGLE_CLIENT_SECRET` | secret | Google OAuth client secret |
+
+Register these OAuth callbacks with each provider:
+
+```text
+https://YOUR_PRODUCTION_DOMAIN/api/auth/callback/google
+https://YOUR_PR_PREVIEW_DOMAIN/api/auth/callback/google
+```
+
+Google can also use `http://localhost:5173/api/auth/callback/google` during local
+development. The provider button only appears when that stage has both required
+Google credentials.
 
 ## Commands
 
@@ -42,34 +70,45 @@ production.
 bun run dev                 # local SPA + Worker runtime
 bun run typecheck           # TypeScript
 bun run test                # domain and HTTP contract tests
-bun run build               # production client + Worker bundles
+bun run build               # production client bundle
 bun run check               # all validation
 bun run db:generate         # create a migration after schema changes
-bun run db:migrate:local    # apply migrations to local D1
-bun run db:migrate:remote   # apply migrations to production D1
-bun run deploy              # build and deploy with Wrangler
+bun run deploy              # deploy the default personal Alchemy stage
+bun run deploy:dev          # deploy the shared dev stage
+bun run deploy:prod         # deploy production
+bun run destroy:dev         # remove the shared dev stage
 ```
 
-## Production setup
+## Environments and deployment
 
-1. Create a D1 database: `npx wrangler d1 create liner-radio`.
-2. Create the audio bucket: `npx wrangler r2 bucket create liner-radio-tracks`.
-3. Replace the placeholder `database_id` in `wrangler.jsonc` with its ID.
-   The `RoomChannel` Durable Object needs no setup beyond the `v1` migration
-   already declared in `wrangler.jsonc`; Wrangler applies it on first deploy.
-4. Add a high-entropy Better Auth secret with
-   `npx wrangler secret put BETTER_AUTH_SECRET`.
-5. Set `BETTER_AUTH_URL` to the final HTTPS application origin.
-6. Run `bun run db:migrate:remote`, then `bun run deploy`.
+[`alchemy.run.ts`](./alchemy.run.ts) owns the Worker, static assets, D1 database
+and migrations, R2 bucket, Durable Object namespace, auth secret, and Worker
+observability. Alchemy applies pending files from `drizzle/` during deployment,
+so migrations and application code move together.
 
-Or let CI do it. `.github/workflows/bootstrap-production.yml` creates the D1
-database and R2 bucket and commits the resulting `database_id`; it is manual
-(`workflow_dispatch`) because creating infrastructure should not happen on every
-push. `.github/workflows/deploy.yml` then verifies and deploys on every push to
-`main`. Both need `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as
-repository secrets. `BETTER_AUTH_SECRET` is set once with
-`bunx wrangler secret put BETTER_AUTH_SECRET` and deliberately never travels
-through CI.
+- A push to `main` verifies the project and deploys the `prod` stage.
+- Opening or updating a pull request into `main` deploys an isolated `pr-N` stage.
+- Closing the pull request destroys that preview database, bucket, Worker, and state.
+
+The GitHub `production` and `preview` environments need
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets (repository secrets
+also work). The Cloudflare token needs Workers Scripts Write, Workers R2 Storage
+Write, D1 Write, and Account Settings Write permissions.
+
+The first production run uses Alchemy's `--adopt` mode to take ownership of the
+existing `liner-radio` Worker and database and the `liner-radio-tracks` bucket.
+Production D1 and R2 resources have a retain policy, so even an accidental
+`alchemy destroy --stage prod` leaves their data in Cloudflare. Alchemy creates
+a new Better Auth signing secret during this handover, so existing production
+sessions sign in again once; later deployments reuse the stored value.
+
+To create a cloud environment for a branch without opening a pull request, use a
+safe stage name and remove it when finished:
+
+```sh
+bun alchemy deploy --stage feature-player --yes
+bun alchemy destroy --stage feature-player --yes
+```
 
 Only upload audio you own or have permission to stream. Uploads are capped at
 30 MB each, 200 tracks and 1 GB per account.

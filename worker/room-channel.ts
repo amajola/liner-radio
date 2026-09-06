@@ -12,7 +12,7 @@ import {
 import type { Env } from "./env";
 import { findUploadedTrack } from "./tracks";
 
-export type Actor = { readonly id: string; readonly name: string };
+export type Actor = { readonly id: string; readonly name: string; readonly image?: string | null };
 
 export type ActionResult =
   | { readonly ok: true; readonly room: Room; readonly serverTime: number }

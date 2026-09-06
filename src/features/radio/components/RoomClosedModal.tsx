@@ -21,7 +21,7 @@ export function RoomClosedModal({
       title="This room has closed"
       subtitle={reason}
       footer={
-        <button className="primary-button" type="button" onClick={onLeave} autoFocus>
+        <button className="btn btn--primary btn--lg" type="button" onClick={onLeave} autoFocus>
           <DoorOpen size={16} /> Back to rooms
         </button>
       }

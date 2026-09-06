@@ -74,15 +74,21 @@ export function RoomSettingsModal({
             required
           />
         </label>
-        <button className="secondary-button" disabled={busy || !renamed}>
+        <button
+          className="btn btn--primary btn--lg btn--block"
+          disabled={busy || !renamed}
+        >
           {busy ? <LoaderCircle className="spin" size={16} /> : null}
           {renamed ? "Save name" : "Saved"}
         </button>
+        <button
+          className="btn btn--ghost btn--sm btn--block"
+          type="button"
+          onClick={() => void copyCode()}
+        >
+          <Copy size={15} /> Copy invite link
+        </button>
       </form>
-
-      <button className="ghost-button wide" type="button" onClick={() => void copyCode()}>
-        <Copy size={15} /> Copy invite link
-      </button>
 
       <div className="modal-divider" />
 
@@ -92,18 +98,22 @@ export function RoomSettingsModal({
         <div>
           <strong>Delete this room</strong>
           <small>
-            Everyone listening is disconnected and the queue is discarded. Your uploaded
-            music is not affected.
+            Everyone listening is disconnected and the queue is discarded. Your
+            uploaded music is not affected.
           </small>
         </div>
         {confirming ? (
-          <div className="danger-confirm" role="group" aria-label="Confirm deleting the room">
+          <div
+            className="callout callout--danger-soft danger-confirm"
+            role="group"
+            aria-label="Confirm deleting the room"
+          >
             <p>
               <TriangleAlert size={15} /> Delete “{roomName}” for everyone?
             </p>
             <div>
               <button
-                className="ghost-button"
+                className="btn btn--ghost btn--sm"
                 type="button"
                 onClick={() => setConfirming(false)}
                 disabled={deleting}
@@ -111,19 +121,23 @@ export function RoomSettingsModal({
                 Keep it
               </button>
               <button
-                className="danger-button"
+                className="btn btn--danger"
                 type="button"
                 onClick={onDelete}
                 disabled={deleting}
               >
-                {deleting ? <LoaderCircle className="spin" size={15} /> : <Trash2 size={15} />}
+                {deleting ? (
+                  <LoaderCircle className="spin" size={15} />
+                ) : (
+                  <Trash2 size={15} />
+                )}
                 {deleting ? "Deleting…" : "Yes, delete"}
               </button>
             </div>
           </div>
         ) : (
           <button
-            className="danger-button"
+            className="btn btn--danger"
             type="button"
             onClick={() => setConfirming(true)}
             disabled={deleting}

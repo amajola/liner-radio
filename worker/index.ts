@@ -1,4 +1,5 @@
 import { createApiHandler, handleRoomSocket } from "./api";
+import { createAuth } from "./auth";
 import type { Env } from "./env";
 import { makeHttpHandler, RequestFailure } from "./http";
 import { handleTrackRequest } from "./tracks";
@@ -10,6 +11,12 @@ const handlers = new WeakMap<Env, ReturnType<typeof makeHttpHandler>>();
 export default {
   async fetch(request: Request, env: Env, context: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    // Authentication emails use the current request's execution context so
+    // delivery can finish after the response without extending its latency.
+    if (url.pathname.startsWith("/api/auth/")) {
+      return createAuth(request, env, context).handler(request);
+    }
 
     // Handled before the Effect router because a 101 upgrade cannot be
     // reconstructed from a plain web Response.

@@ -63,7 +63,7 @@ export function AudioConnection({
       <span className="audio-connection-actions">
         {!waiting && !connected && (
           <button
-            className="connection-action"
+            className={`btn btn--primary btn--sm ${connecting ? "is-busy" : ""}`}
             type="button"
             disabled={connecting}
             onClick={() => void onConnect()}
@@ -79,7 +79,7 @@ export function AudioConnection({
         )}
         {connected && <span className="connection-badge"><Check size={14} /> Connected</span>}
         <button
-          className="connection-mixer"
+          className="btn btn--ghost btn--sm btn--icon"
           type="button"
           onClick={onOpenMixer}
           aria-label="Sound controls"

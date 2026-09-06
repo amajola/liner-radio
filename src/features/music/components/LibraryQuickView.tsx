@@ -73,7 +73,7 @@ export function LibraryQuickView({
         </EmptyState>
       )}
 
-      <div className="quick-list">
+      <div className="scroll-region quick-list">
         {tracks.slice(0, QUICK_LIMIT).map((track) => (
           <article className="track-row compact" key={track.id}>
             <Music2 size={20} />
@@ -85,7 +85,7 @@ export function LibraryQuickView({
             </div>
             {onPick && (
               <button
-                className="add-button"
+                className="btn btn--ghost btn--sm btn--icon"
                 type="button"
                 aria-label={`${actionLabel} ${track.title}`}
                 title={actionLabel}
@@ -102,11 +102,11 @@ export function LibraryQuickView({
       {dragging && <p className="drop-hint">Drop to upload</p>}
 
       <div className="quick-actions">
-        <button className="ghost-button" type="button" onClick={onBrowse}>
+        <button className="btn btn--ghost btn--sm" type="button" onClick={onBrowse}>
           Browse all{tracks.length > QUICK_LIMIT ? ` (${tracks.length})` : ""}
         </button>
         {canUpload && (
-          <button className="ghost-button" type="button" onClick={onUpload}>
+          <button className="btn btn--ghost btn--sm" type="button" onClick={onUpload}>
             <Upload size={15} /> Upload
           </button>
         )}

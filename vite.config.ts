@@ -1,4 +1,3 @@
-import { cloudflare } from "@cloudflare/vite-plugin";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 export default defineConfig({
@@ -6,5 +5,6 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: ["terminal.local"],
   },
-  plugins: [react(), cloudflare()],
+  // Alchemy injects its Cloudflare Vite plugin for dev and deployment.
+  plugins: [react()],
 });

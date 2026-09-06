@@ -27,18 +27,18 @@ export function PeopleQuickView({ room, onOpen }: { room: Room; onOpen: () => vo
       <div className="people-strip">
         {shown.map((person) => (
           <span
-            className={`person-chip ${person.role === "host" ? "is-host" : ""}`}
+            className={`chip ${person.role === "host" ? "chip--solid" : ""}`}
             key={person.id}
             title={person.role === "host" ? `${person.name} · Host` : person.name}
           >
-            <UserRound size={14} />
+            {person.image ? <img className="avatar avatar--xs" src={person.image} alt="" /> : <UserRound size={14} />}
             {person.name}
           </span>
         ))}
-        {overflow > 0 && <span className="person-chip is-more">+{overflow}</span>}
+        {overflow > 0 && <span className="chip chip--quiet">+{overflow}</span>}
       </div>
       <div className="quick-actions">
-        <button className="ghost-button" type="button" onClick={onOpen}>
+        <button className="btn btn--ghost btn--sm" type="button" onClick={onOpen}>
           See everyone
         </button>
       </div>
@@ -69,7 +69,7 @@ export function PeopleModal({
       <div className="member-list">
         {room.members.map((person) => (
           <div className="member-row" key={person.id}>
-            <UserRound size={17} />
+            {person.image ? <img className="avatar avatar--xs" src={person.image} alt="" /> : <UserRound size={17} />}
             <span>
               <strong>{person.name}</strong>
               <small>{person.role === "host" ? "Host" : "Listener"}</small>

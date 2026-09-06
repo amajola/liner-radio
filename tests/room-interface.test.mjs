@@ -42,7 +42,7 @@ test("a dropped audio file opens the upload dialog with the file already chosen"
 test("people are a quick strip with the full roster behind a modal", () => {
   assert.match(peoplePanel, /export function PeopleQuickView/);
   assert.match(peoplePanel, /export function PeopleModal/);
-  assert.match(peoplePanel, /person-chip/);
+  assert.match(peoplePanel, /className=\{`chip \$\{/);
   assert.match(sidePanel, /<PeopleQuickView/);
   assert.match(sidePanel, /<PeopleModal/);
 });
@@ -54,9 +54,22 @@ test("now playing carries transport only, with fine control behind the mixer", (
   assert.doesNotMatch(nowPanel, /crossfade/i);
   assert.doesNotMatch(nowPanel, /station-volume/);
   // Volume, crossfade, ducking and per-device playback all live in the modal.
-  for (const control of ["station-volume", "crossfade-duration", "duck-button", "local-controls"]) {
+  for (const control of ["station-volume", "crossfade-duration", "is-ducked", "local-controls"]) {
     assert.match(mixerModal, new RegExp(control));
   }
+});
+
+test("the host can start a stopped programme straight from the play button", () => {
+  // Regression: Play was disabled whenever `current` was empty, so a host who
+  // had queued music had no way to begin — "next" was the only action that
+  // promotes a queued song, and it is labelled "Skip to the next song".
+  assert.match(nowPanel, /const startsProgramme = !room\.current && room\.queue\.length > 0/);
+  assert.match(
+    nowPanel,
+    /playAction = room\.playing \? "pause" : room\.current \? "resume" : "next"/,
+  );
+  assert.match(nowPanel, /disabled=\{props\.busy \|\| \(!room\.current && !startsProgramme\)\}/);
+  assert.doesNotMatch(nowPanel, /disabled=\{props\.busy \|\| !room\.current\}/);
 });
 
 test("audio connection has explicit, non-repeatable progress and recovery states", () => {
