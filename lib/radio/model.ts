@@ -21,6 +21,16 @@ export type Track = {
   artist: string;
   url: string;
   art?: string;
+  albumId?: string | null;
+  album?: string | null;
+  albumArtist?: string | null;
+  genre?: string | null;
+  year?: number | null;
+  trackNumber?: number | null;
+  discNumber?: number | null;
+  artworkUrl?: string | null;
+  bytes?: number;
+  metadataSource?: "embedded" | "musicbrainz" | "manual";
   duration: number;
   source: "upload";
 };

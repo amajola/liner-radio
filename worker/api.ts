@@ -7,6 +7,7 @@ import type { Env } from "./env";
 import type { ActionResult } from "./room-channel";
 import { RequestFailure, type ApiHandler } from "./http";
 import { handleTrackRequest } from "./tracks";
+import { handleMusicCatalogRequest } from "./music-catalog";
 import { handleProfileRequest } from "./profile";
 
 type Identity = { readonly id: string; readonly name: string; readonly image?: string | null };
@@ -195,6 +196,8 @@ export function createApiHandler(env: Env): ApiHandler {
     }
     const profileResponse = await handleProfileRequest(request, env);
     if (profileResponse) return profileResponse;
+    const catalogResponse = await handleMusicCatalogRequest(request, env);
+    if (catalogResponse) return catalogResponse;
     const trackResponse = await handleTrackRequest(request, env);
     if (trackResponse) return trackResponse;
     return json({ error: "Not found." }, 404);

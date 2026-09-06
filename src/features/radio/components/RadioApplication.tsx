@@ -5,6 +5,7 @@ import { MobileNavigation } from "./MobileNavigation";
 import { RoomView } from "./RoomView";
 import { Toast } from "./Toast";
 import { useUiStore } from "../../../stores/ui-store";
+import { UploadShelf } from "../../music/components/UploadShelf";
 import type { SessionUser } from "../queries";
 
 const spring = { type: "spring" as const, stiffness: 320, damping: 32 };
@@ -17,6 +18,7 @@ export function RadioApplication({ sessionUser }: { sessionUser: SessionUser }) 
       <div className="app-shell">
         <AppHeader user={sessionUser} />
         <Toast />
+        <UploadShelf />
         <main className="app-stage">
           {activeRoomId ? (
             <RoomView roomId={activeRoomId} sessionUser={sessionUser} />

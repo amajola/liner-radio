@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Library, Music2, Plus, Upload } from "lucide-react";
+import { Disc3, Library, Music2, Plus } from "lucide-react";
 import { useState, type DragEvent } from "react";
 import type { Track } from "../../../../lib/radio/model";
 import { EmptyState, LoadingState } from "../../../shared/components/AsyncState";
@@ -107,7 +107,7 @@ export function LibraryQuickView({
         </button>
         {canUpload && (
           <button className="btn btn--ghost btn--sm" type="button" onClick={onUpload}>
-            <Upload size={15} /> Upload
+            <Disc3 size={15} /> Add music
           </button>
         )}
       </div>

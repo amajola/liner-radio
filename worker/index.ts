@@ -2,13 +2,40 @@ import { createApiHandler, handleRoomSocket } from "./api";
 import { createAuth } from "./auth";
 import type { Env } from "./env";
 import { makeHttpHandler, RequestFailure } from "./http";
-import { handleTrackRequest } from "./tracks";
+import { handleTrackRequest, sweepAbandonedUploads } from "./tracks";
 
 export { RoomChannel } from "./room-channel";
 
 const handlers = new WeakMap<Env, ReturnType<typeof makeHttpHandler>>();
 
 export default {
+  /**
+   * Reclaims R2 multipart uploads that were begun and never completed. This
+   * used to run off the back of the next upload the same host started, which
+   * meant someone who abandoned one and never came back left its parts in R2
+   * indefinitely, and everyone else paid for the scan.
+   */
+  async scheduled(
+    controller: ScheduledController,
+    env: Env,
+    context: ExecutionContext,
+  ): Promise<void> {
+    context.waitUntil(
+      sweepAbandonedUploads(env).then(
+        (swept) => {
+          if (swept > 0) console.log(`swept ${swept} abandoned upload(s)`);
+        },
+        // A thrown error marks the invocation failed and Cloudflare may retry
+        // it. The next fire is an hour away and picks up the same rows, so a
+        // retry storm buys nothing over simply reporting and waiting.
+        (cause: unknown) => {
+          controller.noRetry();
+          console.error("upload sweep failed", cause);
+        },
+      ),
+    );
+  },
+
   async fetch(request: Request, env: Env, context: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 

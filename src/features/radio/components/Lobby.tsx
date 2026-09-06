@@ -3,7 +3,7 @@ import { Headphones, KeyRound, Library, ListMusic, Plus, Radio } from "lucide-re
 import { useState, type FormEvent } from "react";
 import { LibraryModal } from "../../music/components/LibraryModal";
 import { LibraryQuickView } from "../../music/components/LibraryQuickView";
-import { UploadTrackModal } from "../../music/components/UploadTrackModal";
+import { AddMusicModal as UploadTrackModal } from "../../music/components/AddMusicModal";
 import { QueryFreshness } from "../../../shared/components/AsyncState";
 import { roomsQueryOptions, type RoomSummary } from "../queries";
 import { useRoomMutations } from "../use-room-mutations";

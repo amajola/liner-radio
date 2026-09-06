@@ -1,3 +1,5 @@
+import { MAXIMUM_TRACK_BYTES } from "./upload-limits.ts";
+
 const encoder = new TextEncoder();
 
 export const MEDIA_TICKET_TTL_MS = 6 * 60 * 60 * 1_000;
@@ -53,7 +55,7 @@ function isTicket(value: unknown, expectedTrackId: string, now: number): value i
     typeof ticket.bytes === "number" &&
     Number.isSafeInteger(ticket.bytes) &&
     ticket.bytes > 0 &&
-    ticket.bytes <= 30 * 1024 * 1024 &&
+    ticket.bytes <= MAXIMUM_TRACK_BYTES &&
     typeof ticket.mimeType === "string" &&
     ticket.mimeType.startsWith("audio/") &&
     typeof ticket.expiresAt === "number" &&
