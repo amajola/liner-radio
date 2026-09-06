@@ -3,6 +3,7 @@ import * as Cloudflare from "alchemy/Cloudflare";
 import * as RemovalPolicy from "alchemy/RemovalPolicy";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
+import { SWEEP_CRON } from "./lib/http/upload-limits";
 import type { RoomChannel } from "./worker/room-channel";
 
 export default Alchemy.Stack(
@@ -32,6 +33,9 @@ export default Alchemy.Stack(
     const app = yield* Cloudflare.Website.Vite("App", {
       name: production ? "liner-radio" : undefined,
       main: "worker/index.ts",
+      // Reclaims abandoned R2 multipart uploads. The expression is shared with
+      // the scheduled handler in worker/index.ts so the two cannot drift.
+      crons: [SWEEP_CRON],
       compatibility: {
         date: "2026-05-22",
         flags: ["nodejs_compat"],

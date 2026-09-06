@@ -1,27 +1,39 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { audioTracks } from "../db/schema";
+import { audioTracks, trackUploads } from "../db/schema";
+import { AUDIO_FORMAT_LABEL, resolveAudioType } from "../lib/http/audio-types";
 import {
   createMediaTicket,
   MEDIA_TICKET_TTL_MS,
   verifyMediaTicket,
 } from "../lib/http/media-ticket";
 import { parseRangeHeader } from "../lib/http/range";
+import {
+  DIRECT_UPLOAD_BYTES,
+  expectedPartBytes,
+  MAXIMUM_LIBRARY_BYTES,
+  MAXIMUM_TRACK_BYTES,
+  MAXIMUM_TRACK_COUNT,
+  partCountFor,
+  UPLOAD_EXPIRY_MS,
+  UPLOAD_PART_BYTES,
+} from "../lib/http/upload-limits";
 import type { Track } from "../lib/radio/model";
 import { createAuth } from "./auth";
 import type { Env } from "./env";
 import { RequestFailure } from "./http";
 
-const maximumFileBytes = 30 * 1024 * 1024;
 const immutableCacheSeconds = 365 * 24 * 60 * 60;
-const audioTypes = new Set([
-  "audio/mpeg",
-  "audio/mp4",
-  "audio/ogg",
-  "audio/wav",
-  "audio/x-wav",
-  "audio/webm",
-]);
+/**
+ * Above this the whole-object cache write is skipped. `cache.put` is handed a
+ * `clone()`, which tees the body and leaves the Worker holding however far
+ * apart the cache and the client drain — on a 300 MB track that is the memory
+ * limit. Large tracks serve from R2 by range instead, which is what a media
+ * element asks for anyway once the file is big.
+ */
+const maximumCacheableBytes = 24 * 1024 * 1024;
+const megabytes = (bytes: number) => Math.round(bytes / (1024 * 1024));
+const gigabytes = (bytes: number) => Math.round(bytes / (1024 * 1024 * 1024));
 
 type Identity = { readonly id: string; readonly name: string };
 
@@ -70,6 +82,106 @@ export async function findUploadedTrack(
   return asTrack(row);
 }
 
+function assertSameOrigin(request: Request) {
+  if (request.headers.get("origin") !== new URL(request.url).origin) {
+    fail("Request origin rejected.", 403);
+  }
+}
+
+async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
+  if (Number(request.headers.get("content-length") || 0) > 12_000) {
+    fail("Request too large.", 413);
+  }
+  const text = await request.text();
+  if (text.length > 12_000) fail("Request too large.", 413);
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return fail("Request body must be valid JSON.");
+  }
+}
+
+type TrackMetadata = {
+  readonly title: string;
+  readonly artist: string;
+  readonly duration: number;
+  readonly mimeType: string;
+};
+
+/**
+ * Shared by both upload paths so a file cannot become admissible simply by
+ * being large enough to take the multipart route.
+ */
+function validateMetadata(input: {
+  title: unknown;
+  artist: unknown;
+  duration: unknown;
+  mimeType: unknown;
+  fileName: unknown;
+  rightsConfirmed: unknown;
+}): TrackMetadata {
+  const title = String(input.title ?? "").trim();
+  const artist = String(input.artist ?? "").trim();
+  const duration = Math.round(Number(input.duration));
+  const declared = String(input.mimeType ?? "");
+  const mimeType = resolveAudioType(declared, String(input.fileName ?? ""));
+
+  if (!mimeType) {
+    // Naming the rejected type matters: the browser, not the person choosing
+    // the file, is what produced it.
+    fail(
+      `Upload a ${AUDIO_FORMAT_LABEL} audio file.` +
+        (declared ? ` This file was reported as “${declared}”.` : ""),
+    );
+  }
+  if (!title || title.length > 180) fail("Enter a track title under 180 characters.");
+  if (!artist || artist.length > 180) fail("Enter an artist name under 180 characters.");
+  if (!Number.isFinite(duration) || duration < 1 || duration > 14_400) {
+    fail("The audio duration must be between one second and four hours.");
+  }
+  if (input.rightsConfirmed !== true && input.rightsConfirmed !== "true") {
+    fail("Confirm that you have permission to stream this audio.");
+  }
+  return { title, artist, duration, mimeType };
+}
+
+/**
+ * Counts bytes already reserved by in-flight multipart uploads as well as
+ * committed tracks, so a host cannot open many large uploads at once and land
+ * far past the quota when they all complete.
+ */
+async function assertLibraryHasRoom(env: Env, ownerId: string, incomingBytes: number) {
+  const db = getDb(env.DB);
+  const [[committed], [pending]] = await Promise.all([
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        bytes: sql<number>`coalesce(sum(${audioTracks.bytes}), 0)`,
+      })
+      .from(audioTracks)
+      .where(eq(audioTracks.owner, ownerId)),
+    db
+      .select({ bytes: sql<number>`coalesce(sum(${trackUploads.bytes}), 0)` })
+      .from(trackUploads)
+      // Only uploads that could still complete count against the quota. An
+      // expired reservation is the sweeper's to reclaim, and must not lock a
+      // host out of their own library in the meantime.
+      .where(
+        and(
+          eq(trackUploads.owner, ownerId),
+          gt(trackUploads.createdAt, new Date(Date.now() - UPLOAD_EXPIRY_MS)),
+        ),
+      ),
+  ]);
+
+  if (Number(committed.count) >= MAXIMUM_TRACK_COUNT) {
+    fail(`Your library can contain up to ${MAXIMUM_TRACK_COUNT} tracks.`);
+  }
+  if (Number(committed.bytes) + Number(pending.bytes) + incomingBytes > MAXIMUM_LIBRARY_BYTES) {
+    fail(`Your uploaded library can use up to ${gigabytes(MAXIMUM_LIBRARY_BYTES)} GB.`);
+  }
+}
+
 async function listTracks(request: Request, env: Env) {
   const user = await identity(request, env);
   const ownerId = new URL(request.url).searchParams.get("owner") || user.id;
@@ -93,48 +205,39 @@ async function listTracks(request: Request, env: Env) {
   );
 }
 
+/**
+ * The single-request path, kept for files small enough that buffering the body
+ * is safe. `formData()` materialises the whole upload in Worker memory, so this
+ * route is capped well below the Worker's limit and anything larger is sent
+ * through the multipart endpoints below.
+ */
 async function uploadTrack(request: Request, env: Env) {
   const user = await identity(request, env);
-  if (request.headers.get("origin") !== new URL(request.url).origin) {
-    fail("Request origin rejected.", 403);
-  }
+  assertSameOrigin(request);
 
+  const tooLarge = `Files over ${megabytes(DIRECT_UPLOAD_BYTES)} MB must use the resumable upload.`;
   const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > maximumFileBytes + 100_000) fail("Audio files can be up to 30 MB.", 413);
-
-  const [{ count, bytes }] = await getDb(env.DB)
-    .select({
-      count: sql<number>`count(*)`,
-      bytes: sql<number>`coalesce(sum(${audioTracks.bytes}), 0)`,
-    })
-    .from(audioTracks)
-    .where(eq(audioTracks.owner, user.id));
-  if (Number(count) >= 200) fail("Your library can contain up to 200 tracks.");
+  if (contentLength > DIRECT_UPLOAD_BYTES + 100_000) fail(tooLarge, 413);
 
   const form = await request.formData();
   const file = form.get("file");
-  const title = String(form.get("title") || "").trim();
-  const artist = String(form.get("artist") || "").trim();
-  const duration = Math.round(Number(form.get("duration")));
-  const rightsConfirmed = form.get("rightsConfirmed") === "true";
-
   if (!(file instanceof File) || file.size === 0) fail("Choose an audio file.");
-  if (file.size > maximumFileBytes) fail("Audio files can be up to 30 MB.", 413);
-  if (Number(bytes) + file.size > 1024 * 1024 * 1024) {
-    fail("Your uploaded library can use up to 1 GB.");
-  }
-  if (!audioTypes.has(file.type)) fail("Upload an MP3, M4A, WAV, OGG, or WebM audio file.");
-  if (!title || title.length > 180) fail("Enter a track title under 180 characters.");
-  if (!artist || artist.length > 180) fail("Enter an artist name under 180 characters.");
-  if (!Number.isFinite(duration) || duration < 1 || duration > 14_400) {
-    fail("The audio duration must be between one second and four hours.");
-  }
-  if (!rightsConfirmed) fail("Confirm that you have permission to stream this audio.");
+  if (file.size > DIRECT_UPLOAD_BYTES) fail(tooLarge, 413);
+
+  const { title, artist, duration, mimeType } = validateMetadata({
+    title: form.get("title"),
+    artist: form.get("artist"),
+    duration: form.get("duration"),
+    mimeType: file.type,
+    fileName: file.name,
+    rightsConfirmed: form.get("rightsConfirmed"),
+  });
+  await assertLibraryHasRoom(env, user.id, file.size);
 
   const id = crypto.randomUUID().replaceAll("-", "");
   const objectKey = `tracks/${user.id}/${id}`;
   await env.TRACKS.put(objectKey, file.stream(), {
-    httpMetadata: { contentType: file.type, cacheControl: "private, max-age=3600" },
+    httpMetadata: { contentType: mimeType, cacheControl: "private, max-age=3600" },
     customMetadata: { ownerId: user.id, originalName: file.name.slice(0, 180) },
   });
 
@@ -145,7 +248,7 @@ async function uploadTrack(request: Request, env: Env) {
       title,
       artist,
       objectKey,
-      mimeType: file.type,
+      mimeType,
       bytes: file.size,
       duration,
       createdAt: new Date(),
@@ -159,6 +262,277 @@ async function uploadTrack(request: Request, env: Env) {
     { track: asTrack({ id, title, artist, duration }) },
     { status: 201, headers: { "Cache-Control": "no-store" } },
   );
+}
+
+type PendingUpload = {
+  readonly id: string;
+  readonly objectKey: string;
+  readonly uploadId: string;
+  readonly title: string;
+  readonly artist: string;
+  readonly mimeType: string;
+  readonly bytes: number;
+  readonly duration: number;
+};
+
+async function loadPendingUpload(
+  env: Env,
+  trackId: string,
+  ownerId: string,
+): Promise<PendingUpload> {
+  const [row] = await getDb(env.DB)
+    .select({
+      id: trackUploads.id,
+      objectKey: trackUploads.objectKey,
+      uploadId: trackUploads.uploadId,
+      title: trackUploads.title,
+      artist: trackUploads.artist,
+      mimeType: trackUploads.mimeType,
+      bytes: trackUploads.bytes,
+      duration: trackUploads.duration,
+    })
+    .from(trackUploads)
+    .where(and(eq(trackUploads.id, trackId), eq(trackUploads.owner, ownerId)))
+    .limit(1);
+  if (!row) fail("That upload has expired or was already finished.", 404);
+  return row;
+}
+
+/** Releases both the R2 multipart upload and the row that tracks it. */
+async function discardUpload(env: Env, pending: PendingUpload) {
+  await env.TRACKS.resumeMultipartUpload(pending.objectKey, pending.uploadId)
+    .abort()
+    .catch(() => undefined);
+  await getDb(env.DB).delete(trackUploads).where(eq(trackUploads.id, pending.id));
+}
+
+/**
+ * A browser that closes mid-upload leaves an R2 multipart upload holding bytes
+ * nobody will ever complete. There is no lifecycle hook here, so the sweep is
+ * amortised onto the next upload the same host starts.
+ */
+/**
+ * Small enough that one delete stays well inside D1's bound-parameter limit,
+ * and that a single fire cannot run long even when every abort is slow.
+ */
+const sweepBatchSize = 50;
+
+async function sweepOneBatch(env: Env, cutoff: Date): Promise<number> {
+  const stale = await getDb(env.DB)
+    .select({
+      id: trackUploads.id,
+      objectKey: trackUploads.objectKey,
+      uploadId: trackUploads.uploadId,
+    })
+    .from(trackUploads)
+    .where(lt(trackUploads.createdAt, cutoff))
+    .limit(sweepBatchSize);
+  if (!stale.length) return 0;
+
+  // Aborting is what actually releases the parts R2 is holding, but a failure
+  // here is not fatal: the upload may already have been aborted or completed.
+  // The rows are deleted either way, so an abort that can never succeed cannot
+  // wedge the sweep behind the same batch forever.
+  for (const row of stale) {
+    await env.TRACKS.resumeMultipartUpload(row.objectKey, row.uploadId)
+      .abort()
+      .catch(() => undefined);
+  }
+  await getDb(env.DB).delete(trackUploads).where(
+    inArray(
+      trackUploads.id,
+      stale.map((row) => row.id),
+    ),
+  );
+  return stale.length;
+}
+
+/**
+ * Reclaims uploads that were begun and never finished — a browser closed
+ * mid-transfer leaves an R2 multipart upload holding bytes nobody will ever
+ * complete. Runs from the Worker's scheduled handler rather than off the back
+ * of the next upload, so a host who abandons one and never returns is still
+ * cleaned up, and starting an upload no longer pays for the sweep.
+ *
+ * Batches are drained up to `maximumBatches` so a backlog clears over a few
+ * fires instead of one run growing without bound.
+ */
+export async function sweepAbandonedUploads(env: Env, maximumBatches = 10): Promise<number> {
+  const cutoff = new Date(Date.now() - UPLOAD_EXPIRY_MS);
+  let swept = 0;
+  for (let batch = 0; batch < maximumBatches; batch += 1) {
+    const removed = await sweepOneBatch(env, cutoff);
+    swept += removed;
+    if (removed < sweepBatchSize) break;
+  }
+  return swept;
+}
+
+async function beginUpload(request: Request, env: Env) {
+  const user = await identity(request, env);
+  assertSameOrigin(request);
+  const body = await readJsonBody(request);
+
+  const bytes = Number(body.bytes);
+  if (!Number.isSafeInteger(bytes) || bytes <= 0) fail("Provide the file size in bytes.");
+  if (bytes > MAXIMUM_TRACK_BYTES) {
+    fail(`Audio files can be up to ${megabytes(MAXIMUM_TRACK_BYTES)} MB.`, 413);
+  }
+  if (bytes <= DIRECT_UPLOAD_BYTES) {
+    fail(`Files under ${megabytes(DIRECT_UPLOAD_BYTES)} MB upload in a single request.`);
+  }
+
+  const metadata = validateMetadata({
+    title: body.title,
+    artist: body.artist,
+    duration: body.duration,
+    mimeType: body.mimeType,
+    fileName: body.fileName,
+    rightsConfirmed: body.rightsConfirmed,
+  });
+
+  await assertLibraryHasRoom(env, user.id, bytes);
+
+  const id = crypto.randomUUID().replaceAll("-", "");
+  const objectKey = `tracks/${user.id}/${id}`;
+  const upload = await env.TRACKS.createMultipartUpload(objectKey, {
+    httpMetadata: { contentType: metadata.mimeType, cacheControl: "private, max-age=3600" },
+    customMetadata: { ownerId: user.id },
+  });
+
+  try {
+    await getDb(env.DB).insert(trackUploads).values({
+      id,
+      owner: user.id,
+      objectKey,
+      uploadId: upload.uploadId,
+      title: metadata.title,
+      artist: metadata.artist,
+      mimeType: metadata.mimeType,
+      bytes,
+      duration: metadata.duration,
+      createdAt: new Date(),
+    });
+  } catch (cause) {
+    await upload.abort().catch(() => undefined);
+    throw cause;
+  }
+
+  return Response.json(
+    { trackId: id, partSize: UPLOAD_PART_BYTES, partCount: partCountFor(bytes) },
+    { status: 201, headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+async function uploadTrackPart(
+  request: Request,
+  env: Env,
+  trackId: string,
+  partNumber: number,
+) {
+  const user = await identity(request, env);
+  assertSameOrigin(request);
+  const pending = await loadPendingUpload(env, trackId, user.id);
+
+  const expected = expectedPartBytes(pending.bytes, partNumber);
+  if (expected <= 0) fail("That part number is not part of this upload.");
+
+  const body = await request.arrayBuffer();
+  // R2 rejects a multipart upload whose non-final parts differ in size, but only
+  // at complete() — after every byte has already been spent. Checking each part
+  // as it lands turns that into an immediate error on the part that is wrong.
+  if (body.byteLength !== expected) {
+    fail(`Part ${partNumber} must be exactly ${expected} bytes.`);
+  }
+
+  const part = await env.TRACKS.resumeMultipartUpload(
+    pending.objectKey,
+    pending.uploadId,
+  ).uploadPart(partNumber, body);
+
+  return Response.json(
+    { partNumber: part.partNumber, etag: part.etag },
+    { headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+async function completeUpload(request: Request, env: Env, trackId: string) {
+  const user = await identity(request, env);
+  assertSameOrigin(request);
+  const pending = await loadPendingUpload(env, trackId, user.id);
+  const body = await readJsonBody(request);
+
+  const submitted = Array.isArray(body.parts) ? body.parts : fail("Provide the uploaded parts.");
+  if (submitted.length !== partCountFor(pending.bytes)) {
+    fail("The upload is missing parts. Start it again.");
+  }
+  const parts = submitted.map((value, index) => {
+    const part = value as { partNumber?: unknown; etag?: unknown } | null;
+    const partNumber = Number(part?.partNumber);
+    const etag = String(part?.etag ?? "");
+    if (partNumber !== index + 1 || !etag) {
+      fail("The upload parts are out of order. Start it again.");
+    }
+    return { partNumber, etag };
+  });
+
+  let object: R2Object;
+  try {
+    object = await env.TRACKS.resumeMultipartUpload(
+      pending.objectKey,
+      pending.uploadId,
+    ).complete(parts);
+  } catch (cause) {
+    await discardUpload(env, pending).catch(() => undefined);
+    throw cause;
+  }
+
+  // The declared size gated the quota check, so the assembled object has to
+  // match it — otherwise a client could reserve 40 MB and store 300.
+  if (object.size !== pending.bytes) {
+    await env.TRACKS.delete(pending.objectKey).catch(() => undefined);
+    await getDb(env.DB).delete(trackUploads).where(eq(trackUploads.id, pending.id));
+    fail("The uploaded audio did not match its declared size. Start it again.");
+  }
+
+  const db = getDb(env.DB);
+  try {
+    await db.insert(audioTracks).values({
+      id: pending.id,
+      owner: user.id,
+      title: pending.title,
+      artist: pending.artist,
+      objectKey: pending.objectKey,
+      mimeType: pending.mimeType,
+      bytes: pending.bytes,
+      duration: pending.duration,
+      createdAt: new Date(),
+    });
+  } catch (cause) {
+    await env.TRACKS.delete(pending.objectKey).catch(() => undefined);
+    await db.delete(trackUploads).where(eq(trackUploads.id, pending.id));
+    throw cause;
+  }
+  await db.delete(trackUploads).where(eq(trackUploads.id, pending.id));
+
+  return Response.json(
+    {
+      track: asTrack({
+        id: pending.id,
+        title: pending.title,
+        artist: pending.artist,
+        duration: pending.duration,
+      }),
+    },
+    { status: 201, headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+async function abortUpload(request: Request, env: Env, trackId: string) {
+  const user = await identity(request, env);
+  assertSameOrigin(request);
+  await discardUpload(env, await loadPendingUpload(env, trackId, user.id));
+  return Response.json({ aborted: true }, { headers: { "Cache-Control": "no-store" } });
 }
 
 async function createPlaybackGrant(request: Request, env: Env, trackId: string) {
@@ -303,7 +677,7 @@ async function streamTrack(
     parsed === null || (parsed.start === 0 && parsed.length === ticket.bytes);
   let body: ReadableStream | null = object.body;
 
-  if (isWholeObject && context) {
+  if (isWholeObject && context && ticket.bytes <= maximumCacheableBytes) {
     const cacheHeaders = new Headers(headers);
     cacheHeaders.set("Cache-Control", `public, max-age=${immutableCacheSeconds}, immutable`);
     const cacheable = new Response(body, { status: 200, headers: cacheHeaders });
@@ -346,6 +720,25 @@ export async function handleTrackRequest(
   }
   if (url.pathname === "/api/tracks" && request.method === "POST") {
     return uploadTrack(request, env);
+  }
+  if (url.pathname === "/api/tracks/uploads" && request.method === "POST") {
+    return beginUpload(request, env);
+  }
+  const partMatch = url.pathname.match(
+    /^\/api\/tracks\/uploads\/([a-f0-9]{32})\/parts\/(\d{1,5})$/,
+  );
+  if (partMatch && request.method === "PUT") {
+    return uploadTrackPart(request, env, partMatch[1], Number(partMatch[2]));
+  }
+  const completeMatch = url.pathname.match(
+    /^\/api\/tracks\/uploads\/([a-f0-9]{32})\/complete$/,
+  );
+  if (completeMatch && request.method === "POST") {
+    return completeUpload(request, env, completeMatch[1]);
+  }
+  const abortMatch = url.pathname.match(/^\/api\/tracks\/uploads\/([a-f0-9]{32})$/);
+  if (abortMatch && request.method === "DELETE") {
+    return abortUpload(request, env, abortMatch[1]);
   }
   const playbackMatch = url.pathname.match(/^\/api\/tracks\/([a-f0-9]{32})\/playback$/);
   if (playbackMatch && request.method === "GET") {

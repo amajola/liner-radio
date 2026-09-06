@@ -4,7 +4,7 @@ import type { Room, Track } from "../../../../lib/radio/model";
 import { EmptyState } from "../../../shared/components/AsyncState";
 import { LibraryModal } from "../../music/components/LibraryModal";
 import { LibraryQuickView } from "../../music/components/LibraryQuickView";
-import { UploadTrackModal } from "../../music/components/UploadTrackModal";
+import { AddMusicModal as UploadTrackModal } from "../../music/components/AddMusicModal";
 import { PeopleModal, PeopleQuickView } from "./PeoplePanel";
 
 type Props = {

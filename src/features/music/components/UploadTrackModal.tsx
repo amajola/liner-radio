@@ -1,5 +1,6 @@
-import { FileAudio, LoaderCircle, Upload } from "lucide-react";
+import { FileAudio, LoaderCircle, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { MAXIMUM_TRACK_BYTES } from "../../../../lib/http/upload-limits";
 import { Modal } from "../../../shared/components/Modal";
 import { useUiStore } from "../../../stores/ui-store";
 import {
@@ -22,6 +23,7 @@ export function UploadTrackModal({
   initialFile?: File | null;
 }) {
   const upload = useUploadTrack();
+  const maximumMegabytes = Math.round(MAXIMUM_TRACK_BYTES / (1024 * 1024));
   const showError = useUiStore((state) => state.showError);
   const fileInput = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
@@ -31,6 +33,10 @@ export function UploadTrackModal({
   const [dragging, setDragging] = useState(false);
 
   function takeFile(next: File | null) {
+    if (next && next.size > MAXIMUM_TRACK_BYTES) {
+      showError(`Audio files can be up to ${maximumMegabytes} MB.`);
+      return;
+    }
     setFile(next);
     if (next) setTitle((current) => current || titleFromFileName(next.name));
   }
@@ -55,7 +61,7 @@ export function UploadTrackModal({
       item.type.startsWith("audio/"),
     );
     if (!dropped) {
-      showError("Drop an MP3, M4A, WAV, OGG or WebM audio file.");
+      showError("Drop an MP3, M4A, WAV, FLAC, OGG or WebM audio file.");
       return;
     }
     takeFile(dropped);
@@ -86,7 +92,7 @@ export function UploadTrackModal({
       open={open}
       onClose={onClose}
       title="Upload music"
-      subtitle="MP3, M4A, WAV, OGG or WebM · up to 30 MB"
+      subtitle={`MP3, M4A, WAV, FLAC, OGG or WebM · up to ${maximumMegabytes} MB`}
     >
       <form className="upload-modal-form" onSubmit={submit}>
         <label
@@ -146,6 +152,24 @@ export function UploadTrackModal({
           />
           <span>I own this audio or have permission to stream it to this room.</span>
         </label>
+
+        {upload.isPending && upload.progress !== null ? (
+          <div className="upload-progress">
+            <div className="upload-progress-track">
+              <div
+                className="upload-progress-fill"
+                style={{ width: `${Math.round(upload.progress * 100)}%` }}
+              />
+            </div>
+            <div className="upload-progress-meta">
+              <span>{Math.round(upload.progress * 100)}% uploaded</span>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={upload.cancel}>
+                <X size={14} />
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <button className="btn btn--primary btn--lg" disabled={upload.isPending || !file}>
           {upload.isPending ? <LoaderCircle className="spin" size={16} /> : <Upload size={16} />}
